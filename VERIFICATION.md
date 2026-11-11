@@ -2,17 +2,17 @@
 
 ## Latest deployment preparation
 
-- 52 backend unit tests passed.
+- 53 backend unit tests passed after the navigation regression test was added.
 - 17 supplied brain tests passed (offline/mocked provider checks).
 - 14 frontend unit tests passed, including simulated walking, permission denial, actions and privacy guards.
 - Vite production build passed.
 - Production same-origin serving checked using FastAPI TestClient: home, voice-test SPA route, health, unknown API 404, and .env request returning the SPA rather than the private file.
 - Source scanned against configured credential values before staging. No configured credentials included.
 - Supplied brain.py, llm.py and test_brain.py logic preserved.
-- Docker is unavailable locally: container build and hosted end-to-end behavior have not been verified.
-- GitHub Actions is configured; a local pass does not establish that the hosted workflow passed.
+- Docker is unavailable locally; the image built and started successfully on Render. Hosted camera, voice and web checks are recorded below.
+- GitHub Actions passed for application commit 83db2e7.
 
-## Previous optional-feature checks
+## Earlier optional-feature checks (superseded by results below)
 
 - Camera: real browser upload of a synthetic medicine label returned printed text and the medical caution; actual Timbre playback checked; file input cleared. Hindi and Kannada live image responses were obtained, with intermittent provider errors.
 - Experimental isolated browser: one live weather request completed; STOP, fresh browser isolation, domain approvals and action limits checked. Reliability varied due to free-provider limits/timeouts.
@@ -46,3 +46,7 @@ Safety checks re-run: 15-step cap and browser/network cleanup, fresh cookie cont
 Free-model reliability remains variable: all three camera requests succeeded; one of the first two hosted web tasks succeeded. A subsequent local Wikipedia run succeeded. This is a small sample, not a reliability guarantee. Payment/credential blocking is enforced in the backend. No person identification is offered. The isolated browser cannot control the user's phone, apps, personal tabs or profile.
 
 Official references: https://aistudio.google.com/docs/openai ; https://aistudio.google.com/docs/image-understanding ; https://aistudio.google.com/docs/pricing#gemini-3.1-flash-lite ; https://console.groq.com/docs/vision
+
+### Final hosted check of 83db2e7
+
+Render reported this commit Live. The first post-deployment Wikipedia attempt lost its WebSocket after 10695 ms (three frames); health stayed HTTP 200 and no crash event was observed. One retry completed the exact article first paragraph in 27364 ms (12 screenshot frames, groq,gemini,gemini). It exercised the new navigation-context recovery once. This confirms the retry path works on the hosted service, while also showing the experimental service is intermittent. Weather remains the independently successful 9974 ms hosted result above.
