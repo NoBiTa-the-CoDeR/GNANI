@@ -1,3 +1,9 @@
+# Live app
+
+https://gnani-ai-02v0.onrender.com
+
+Hosted on Render Free. The instance can take 50 seconds or more to wake after inactivity. Free AI provider quotas can temporarily interrupt replies. Runtime API keys are stored privately in Render, not in this repository.
+
 # gNani AI
 
 A voice companion with in-page journey guidance, recipes and visual help. The latest user-supplied `backend/brain.py` and `backend/test_brain.py` are preserved byte for byte. FastAPI connects Prisma transcripts and one history list per WebSocket session to the supplied brain. Timbre speaks the visible answer; there is no browser speech fallback.
@@ -125,7 +131,7 @@ Verification report for these optional phases: `VERIFICATION.md`. The observed f
 
 ## GitHub and production deployment
 
-This repository includes a Dockerfile that builds React and serves it with FastAPI on one HTTPS origin, including WebSockets. `render.yaml` configures a free Render web service and automatic deployment on each commit to the connected branch. See https://render.com/docs/blueprint-spec.
+This repository includes a Dockerfile that builds React and serves it with FastAPI on one HTTPS origin, including WebSockets. `render.yaml` configures a free Render web service and automatic deployment after GitHub checks pass to the connected branch. See https://render.com/docs/blueprint-spec.
 
 1. Push this source to your GitHub repository.
 2. In Render choose New → Blueprint and connect that repository. Review the free plan before creating it.
@@ -133,6 +139,6 @@ This repository includes a Dockerfile that builds React and serves it with FastA
 4. Set APP_ORIGINS to the exact HTTPS address Render assigns, then redeploy. This is required for the opt-in experimental web assistant.
 5. Open the assigned HTTPS address and check `/api/health`, microphone, Timbre playback and a typed question. A build alone does not verify live API credentials.
 
-Subsequent pushes redeploy automatically; uncommitted local changes are not uploaded automatically. Free instances may sleep and have cold starts. Browser automation can exceed free-instance memory; its live hosted behavior remains unverified. Android acoustics and background notifications require a physical-phone check.
+Subsequent pushes redeploy automatically after checks pass; uncommitted local changes are not uploaded automatically. Free instances may sleep and have cold starts. Browser automation can exceed free-instance memory; its live hosted behavior remains unverified. Android acoustics and background notifications require a physical-phone check.
 
 Do not use GitHub Pages for this app: the Python backend and WebSockets require a running server.

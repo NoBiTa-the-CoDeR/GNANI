@@ -20,4 +20,15 @@
 - UI replays and controlled tests are not live-provider verification.
 - Physical Android microphone acoustics, native screen-sharing chooser and Android background notifications remain unverified.
 
-No public deployment has been verified yet. Add private runtime keys in the host's environment, then test microphone, speech playback, a general question and navigation over the assigned HTTPS address.
+## Hosted verification (2026-11-11)
+
+Public address: https://gnani-ai-02v0.onrender.com
+
+- Container built and started after adding libatomic1 for the Playwright driver.
+- HTTPS frontend loaded in the browser.
+- GET /api/health: HTTP 200, 215 ms, Gnani and conversation provider configured.
+- Real hosted WebSocket request "Hello, how are you?": English reply at 1282 ms, first Timbre sentence at 2329 ms, second at 2909 ms.
+- Separate browser "Hello" request: providers rate-limited; visible OpenRouter HTTP 429. Free-provider availability is intermittent.
+- Physical microphone recording/playback on a smartphone has not been tested on this hosted deployment.
+- Automatic deployment configured after CI checks; update propagation is being checked.
+

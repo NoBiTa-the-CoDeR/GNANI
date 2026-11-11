@@ -5,7 +5,7 @@ services:
     plan: free
     region: singapore
     healthCheckPath: /api/health
-    autoDeployTrigger: commit
+    autoDeployTrigger: checksPass
     envVars:
       - key: APP_ENV
         value: production
