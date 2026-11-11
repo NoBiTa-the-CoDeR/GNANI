@@ -121,7 +121,7 @@ Domain and submission approval are server-side decisions with one-use approval I
 
 All network traffic goes through an authenticated loopback HTTPS CONNECT proxy. It rejects private/reserved DNS answers and connects to the validated public IP itself, preventing Chromium from performing a second, potentially rebound DNS lookup. Unapproved third-party resources are blocked. Sessions allow at most fifteen model actions or ninety seconds; STOP, disconnect and timeout close the browser and proxy sockets. Capacity is two isolated sessions, with per-IP start limits. No screenshots are persisted by the app. `backend/web-actions.log` contains scrubbed action records and is ignored by Git; page input values, cookies, credentials and raw model responses are not logged.
 
-Verification report for these optional phases: `../optional-verification/REPORT.md`. The observed free services were not reliable enough to claim every requested live test passed; see the explicit quota-limited cases there. Android acoustics/background notifications from Prompt A remain unverified as agreed.
+Verification report for these optional phases: `VERIFICATION.md`. The observed free services were not reliable enough to claim every requested live test passed; see the explicit quota-limited cases there. Android acoustics/background notifications from Prompt A remain unverified as agreed.
 
 ## GitHub and production deployment
 
