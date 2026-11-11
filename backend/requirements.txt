@@ -1,0 +1,7 @@
+fastapi>=0.100,<1
+uvicorn[standard]>=0.22,<1
+httpx>=0.24,<1
+python-dotenv>=1,<2
+
+Pillow>=13,<14
+playwright>=1.65,<2

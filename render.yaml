@@ -1,0 +1,19 @@
+services:
+  - type: web
+    name: gnani-ai
+    runtime: docker
+    plan: free
+    region: singapore
+    healthCheckPath: /api/health
+    autoDeployTrigger: commit
+    envVars:
+      - key: APP_ENV
+        value: production
+      - key: LLM_PROVIDERS
+        value: groq,openrouter
+      - key: GROQ_MODEL
+        sync: false
+      - key: GNANI_API_KEY
+        sync: false
+      - key: GROQ_API_KEY
+        sync: false

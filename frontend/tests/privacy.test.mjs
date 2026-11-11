@@ -1,0 +1,2 @@
+import test from 'node:test';import assert from 'node:assert/strict';import {isEcho} from '../src/echoGuard.js';
+test('reject delayed assistant PCM without rejecting a different speech signal',()=>{const rate=48000,ref=Float32Array.from({length:rate*3},(_,i)=>.2*Math.sin(i*2*Math.PI*440/rate)),echo=ref.slice(rate-4096,rate),user=Float32Array.from(echo,(_,i)=>.2*Math.sin(i*2*Math.PI*223/rate));assert.ok(isEcho(echo,ref,1.1,rate));assert.ok(!isEcho(user,ref,1.1,rate));assert.ok(!isEcho(user,null,1,rate))});

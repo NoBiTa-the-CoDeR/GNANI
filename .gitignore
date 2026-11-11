@@ -1,0 +1,13 @@
+.env
+.venv/
+node_modules/
+dist/
+__pycache__/
+backend/timing.log
+backend/tools.log
+backend/web-actions.log
+
+.env.*
+!.env.example
+*.log
+.DS_Store
