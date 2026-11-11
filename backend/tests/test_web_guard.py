@@ -106,3 +106,17 @@ class Guard(unittest.TestCase):
     with self.assertRaises(Blocked):await w.execute({'action':'click','i':1},{'elements':[{'blocked':False}]})
     self.assertEqual(w.approval.call_args.args[0],'login_booking');element.click.assert_not_awaited()
   asyncio.run(run())
+
+class NavigationSnapshot(unittest.TestCase):
+ def test_snapshot_retries_only_navigation_context_changes(self):
+  async def run():
+   w=web.WebRun(AsyncMock(),'read a page');w.page=MagicMock();w.page.wait_for_load_state=AsyncMock()
+   result={'url':'https://example.com','title':'Example','text':'Example','elements':[]}
+   w.page.evaluate=AsyncMock(side_effect=[RuntimeError('Execution context was destroyed, most likely because of a navigation'),result])
+   value=await w.snapshot()
+   self.assertEqual(value['title'],'Example');self.assertEqual(w.page.evaluate.await_count,2)
+   self.assertEqual(w.history[0]['action'],'navigation')
+   w.page.evaluate=AsyncMock(side_effect=RuntimeError('page closed'))
+   with self.assertRaises(RuntimeError):await w.snapshot()
+   self.assertEqual(w.page.evaluate.await_count,1)
+  asyncio.run(run())

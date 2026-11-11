@@ -127,7 +127,16 @@ class WebRun:
    except Exception:pass
    await asyncio.sleep(1)
  async def snapshot(self):
-  raw=await self.page.evaluate(SNAPSHOT)
+  # Links can commit a new document while the next snapshot starts.
+  for attempt in range(3):
+   try:
+    await self.page.wait_for_load_state('domcontentloaded',timeout=12000)
+    raw=await self.page.evaluate(SNAPSHOT)
+    break
+   except Exception as exc:
+    if 'execution context was destroyed' not in str(exc).lower() or attempt==2:raise
+    await self.log('navigation','waiting','Waiting for the new page to finish opening.')
+    await asyncio.sleep(.15)
   raw['first_paragraph']=scrub(raw.get('first_paragraph',''),3000)
   raw['url']=scrub(raw['url'],1800);raw['title']=scrub(raw['title'],250);raw['text']=scrub(raw['text'],14000)
   for e in raw['elements']:
@@ -232,7 +241,12 @@ class WebRun:
   except asyncio.CancelledError:raise
   except Blocked as exc:await self.log('guard','blocked',str(exc));await self.event({'type':'error','text':scrub(str(exc),1000)})
   except Exception as exc:
-   trace.failure('web_session',exc);await self.event({'type':'error','text':'The separate browser could not complete this task ('+type(exc).__name__+'). You can try another public page.'})
+   trace.failure('web_session',exc)
+   message=str(exc).lower()
+   reason=('The page changed while I was reading it. Please try once more.' if 'execution context was destroyed' in message else
+    'The page took too long to respond. Please try another public page.' if 'timeout' in message else
+    'The separate browser stopped unexpectedly. Please try another public page.')
+   await self.log('browser','error',reason);await self.event({'type':'error','text':reason})
   finally:await self.close()
  async def close(self):
   if self.waiter and not self.waiter.done():self.waiter.cancel()
