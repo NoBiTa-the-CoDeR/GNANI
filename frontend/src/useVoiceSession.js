@@ -38,7 +38,7 @@ export function useVoiceSession(options){
    });
   }catch{setError('The voice could not play. Please try again.')}finally{if(url)URL.revokeObjectURL(url);lastOutputAt.current=performance.now();if(serial===playSerial.current){player.current=null;setSpeaking(false);if(item.pauseMs)await new Promise(r=>setTimeout(r,item.pauseMs));if(serial===playSerial.current){playing.current=false;drain()}}}
  }
- function send(type,value={}){if(socket.current?.readyState===1)socket.current.send(JSON.stringify({type,...value}))}
+ function send(type,value={}){if(['turn','text'].includes(type)&&socket.current?.readyState===1)socket.current.send(JSON.stringify({type:'language_preference',language:localStorage.getItem('gnani-language')||'auto'}));if(socket.current?.readyState===1)socket.current.send(JSON.stringify({type,...value}))}
  async function connect(){
   if(socket.current?.readyState===1)return;
   if(connecting.current)return connecting.current;
@@ -57,7 +57,7 @@ export function useVoiceSession(options){
     if(m.type==='audio_sentence'){const item={text:m.text,chunks:m.chunks,priority:80,requestId:m.request_id,pauseMs:m.pause_ms??200};latest.current.push(item);queue.current.push(item);drain()}
     if(m.type==='text_only')setLine(m.text);
     if(m.type==='tool_error'||m.type==='error')setError(m.text);
-    if(m.type==='audio_unavailable')setError('gNani’s voice is unavailable. Please try Listen again.');
+    if(m.type==='audio_unavailable')setError(m.text||'gNani’s voice is unavailable. Please try Listen again.');
     if(m.type==='response_end'||m.type==='turn_cancelled'||m.type==='error'||m.type==='stt_empty'){awaiting.current=false;drain()}
     if(m.type==='timing')console.info('[gNani timing]',m.events);
     opts.current.onEvent?.(m);
@@ -127,7 +127,7 @@ export function useVoiceSession(options){
   try{if(['reply','song'].includes(kind)){
    speechAbort.current?.abort();const abort=new AbortController();speechAbort.current=abort;
    const response=await fetch('/api/speech/stream',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({text,lang,...settings}),signal:abort.signal});
-   if(!response.ok)throw new Error('Timbre returned HTTP '+response.status+'. Please try again.');const reader=response.body.getReader(),decoder=new TextDecoder();let buffer='';
+   if(!response.ok)throw new Error('Speech service returned HTTP '+response.status+'. Please try again.');const reader=response.body.getReader(),decoder=new TextDecoder();let buffer='';
    while(true){const {value,done}=await reader.read();buffer+=decoder.decode(value||new Uint8Array(),{stream:!done});const lines=buffer.split('\n');buffer=lines.pop();for(const line of lines){if(!line.trim())continue;const item=JSON.parse(line);if(item.error)throw new Error(item.error);if(running.current&&version===generation.current){queue.current.push({...item,template:true,priority,kind});drain()}}if(done)break}return;
   }const value=await prefetch(text,lang,settings);if(!running.current||version!==generation.current||epoch!==guidanceEpoch.current)return;queue.current.push({...value,template:true,priority,kind});drain()}catch(e){if(e.name!=='AbortError')setError(e.message)}
  }

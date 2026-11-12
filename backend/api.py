@@ -11,7 +11,7 @@ from fastapi import Request, HTTPException
 from fastapi.responses import JSONResponse, Response, StreamingResponse
 from pydantic import BaseModel, Field
 from typing import Optional, Literal
-from backend import trace, voices
+from backend import trace, voices, multilingual
 from backend.tts_normalize import sentences
 import json
 
@@ -70,6 +70,7 @@ class Limits:
 
 # No raw request URL, response body, or exception string is emitted.
 def error_info(exc):
+    if isinstance(exc,multilingual.SpeechError):return {'error':'speech_unavailable','message':str(exc)}
     if isinstance(exc,httpx.HTTPStatusError):return {'error':'upstream_http','upstream_status':exc.response.status_code,'message':f'The service returned HTTP {exc.response.status_code} {exc.response.reason_phrase}. Please try again.'}
     if isinstance(exc,(asyncio.TimeoutError,httpx.TimeoutException)):return {'error':'timeout','message':'The service took too long to respond. Please try again.'}
     if isinstance(exc,httpx.RequestError):
@@ -299,9 +300,9 @@ def install(app,brain,synthesize):
     @app.post('/api/speech')
     async def speak(body:SpeechInput,request:Request):
         limits.check(request,'speech',40)
-        locale={'en':'en-IN','hi':'hi-IN','kn':'kn-IN','hi-en':'hi-en','en-IN':'en-IN','hi-IN':'hi-IN','kn-IN':'kn-IN'}.get(body.lang)
+        locale=multilingual.canonical(body.lang)
         if not locale:raise HTTPException(422,'This voice language is not available.')
-        try:effective=voices.settings(locale,body.voice,body.speed,body.model)
+        try:effective=voices.settings(locale,body.voice,body.speed,body.model) if locale.split('-')[0] in multilingual.GNANI else ('gemini',body.voice,body.speed)
         except ValueError:raise HTTPException(422,'Choose a documented voice and speed.')
         key=(locale,body.text,*effective,body.script)
         async with locks['speech']:
@@ -316,9 +317,10 @@ def install(app,brain,synthesize):
     @app.post('/api/speech/stream')
     async def speech_stream(body:StreamSpeechInput,request:Request):
         limits.check(request,'speech',40)
-        locale={'en':'en-IN','hi':'hi-IN','kn':'kn-IN','hi-en':'hi-en','en-IN':'en-IN','hi-IN':'hi-IN','kn-IN':'kn-IN'}.get(body.lang)
+        locale=multilingual.canonical(body.lang)
         if not locale:raise HTTPException(422,'This language is unavailable.')
-        try:voices.settings(locale,body.voice,body.speed,body.model)
+        try:
+            if locale.split('-')[0] in multilingual.GNANI:voices.settings(locale,body.voice,body.speed,body.model)
         except ValueError:raise HTTPException(422,'Choose a documented voice and speed.')
         async def stream():
             for sentence in sentences(body.text,locale,body.script):

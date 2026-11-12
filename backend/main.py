@@ -27,7 +27,7 @@ import httpx
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from backend.diagnostics import sse_audio
-from backend import timing, trace, language, voices
+from backend import timing, trace, language, voices, multilingual
 from backend.tts_normalize import normalize, sentences
 from backend.api import install as install_api, error_info
 
@@ -167,11 +167,16 @@ KEY=os.getenv('GNANI_API_KEY','')
 async def health():
     return {'ok':True,'gnani_configured':bool(KEY),'brain_configured':bool(sys.modules['llm'].load_providers())}
 
-async def transcribe(audio):
+async def transcribe(audio,preferred=None):
+    if not preferred or preferred.split("-")[0] not in multilingual.GNANI:
+        timing.mark("stt_start")
+        value=await multilingual.transcribe(audio,preferred)
+        timing.mark("stt_complete")
+        return value
     if not KEY: raise RuntimeError('speech_not_configured')
     timing.mark('stt_start')
     async with httpx.AsyncClient(timeout=45) as c:
-        r=await c.post(GNANI+'/stt/v3',headers={'X-API-Key-ID':KEY},files={'audio_file':('speech.wav',audio,'audio/wav')},data={'model':os.getenv('GNANI_STT_MODEL','prisma-v3.0'),'language_code':'indic-auto','format':'codemix'})
+        r=await c.post(GNANI+'/stt/v3',headers={'X-API-Key-ID':KEY},files={'audio_file':('speech.wav',audio,'audio/wav')},data={'model':os.getenv('GNANI_STT_MODEL','prisma-v3.0'),'language_code':'indic-auto' if preferred=='hi-en' else preferred or 'indic-auto','format':'codemix'})
         r.raise_for_status();d=r.json();timing.mark('stt_complete')
         return d.get('transcript',''),d.get('detected_language_code')
 
@@ -184,13 +189,16 @@ def voice_for(lang):
 
 tts_lock=asyncio.Lock()
 async def synthesize(text,lang,voice=None,speed=None,model=None,script='native'):
+    locale=multilingual.canonical(lang)
+    if not locale:raise multilingual.SpeechError('This speech language is not supported.')
+    if locale.split('-')[0] not in multilingual.GNANI:
+        return await multilingual.synthesize(text,locale,male=voice=='__male__')
     if not KEY: raise RuntimeError('speech_not_configured')
-    locale=lang if lang in ('hi-IN','kn-IN','en-IN','hi-en') else 'en-IN'
     model,voice,speed=voices.settings(locale,voice,speed,model)
     text=normalize(text,locale,script)
     if not text:raise ValueError('empty_speech_text')
     payload={'text':text,'model':model,'voice':voice,'language':locale,'speed':speed,'audio_config':{'encoding':'linear_pcm','container':'wav','num_channels':1,'sample_rate':48000,'sample_width':2}}
-    trace.event('tts','start',{'en-IN':'locale_en','hi-IN':'locale_hi','kn-IN':'locale_kn','hi-en':'locale_mixed'}[locale]);timing.mark('tts_start')
+    trace.event('tts','start','gnani_'+locale);timing.mark('tts_start')
     lines=[]
     # The account permits one active request. Prefetch while audio plays,
     # without overlapping requests to Timbre.
@@ -210,6 +218,12 @@ async def synthesize(text,lang,voice=None,speed=None,model=None,script='native')
     return [base64.b64encode(audio).decode('ascii')]
 
 install_api(app,brain,synthesize)
+from backend.youtube import install as install_youtube
+install_youtube(app,brain)
+
+@app.get("/api/languages")
+async def language_catalog():
+    return {"languages":[{"code":multilingual.canonical(c),"name":n,"speech_provider":"gnani" if c in multilingual.GNANI else "gemini"} for c,n in multilingual.NAMES.items()],"extra_speech_enabled":multilingual.enabled()}
 from backend.vision import install as install_vision
 install_vision(app)
 from backend.web_assistant import install as install_web
@@ -243,6 +257,8 @@ def mentioned_step(text):
 async def session(ws:WebSocket):
     await ws.accept()
     history=[]
+    preferred_language=None
+    turn_language=None
     location=None
     accuracy=None
     location_asked=False
@@ -297,8 +313,8 @@ async def session(ws:WebSocket):
         elif panel and panel_lang!=brain.detect_language(transcript) and re.search(r'(?i)how|kaise|कैसे|ಹೇಗೆ',transcript):
             hint={'role':'system','content':'The user has changed language. If answering about the visible helper topic, call show_panel again with all content translated into the latest user language. Include photo queries and a video query in that language.'}
             history.append(hint)
-        user_locale=language.detect(transcript,None)
-        language_hint={'role':'system','content':'Latest user language: '+{'en-IN':'English. Answer in English only.','hi-IN':'Hindi. Use Devanagari script.','hi-en':'Hindi mixed with English. Use Devanagari for Hindi words.','kn-IN':'Kannada. Use Kannada script.'}[user_locale]+' Music starts only after the user taps Play. For generated songs, use words in this same language and say they are spoken with music, not sung.'}
+        user_locale=turn_language or preferred_language or language.detect(transcript,None)
+        language_hint={'role':'system','content':'Latest user language: '+multilingual.instruction(user_locale)+' Music starts only after the user taps Play. For generated songs, use words in this same language and say they are spoken with music, not sung.'}
         if re.search(r'(?i)story|कहानी|ಕಥೆ',transcript) and re.search(r'(?i)male|female|grandfather|grandmother|man|woman|दादा|दादी|ಅಜ್ಜ',transcript):
             language_hint['content']+=' For this story use both [[F]]female narration or dialogue[[/F]] and [[M]]male quoted dialogue[[/M]]. These exact tags select Timbre voices; do not replace them with speaker names.'
         history.append(language_hint)
@@ -338,7 +354,7 @@ async def session(ws:WebSocket):
             except Exception:
                 trace.event('language','repair_failed',expected_locale)
         if result.get('text') and language.matches(result['text'],expected_locale):
-            result['lang']={'en-IN':'en','hi-IN':'hi','hi-en':'hi','kn-IN':'kn'}[expected_locale]
+            result['lang']=expected_locale.split('-')[0]
         timing.mark('llm_complete')
         err=result.get('error')
         # Preserve a completed visual tool result when a free provider fails
@@ -375,13 +391,18 @@ async def session(ws:WebSocket):
             trace.event('tts','skipped','empty_brain_text')
             await emit({'type':'error','text':'The assistant returned an empty response. Please try again.'})
             await emit({'type':'response_end'});return
-        locale={'en':'en-IN','hi':'hi-IN','kn':'kn-IN'}.get(result.get('lang'))
+        locale=user_locale
+        if not language.matches(text,locale):
+            trace.event('tts','skipped','reply_language_mismatch')
+            await emit({'type':'text_only','text':text,'language':language.detect(text)})
+            await emit({'type':'audio_unavailable','text':'The reply could not be verified in your selected language. The text is shown; please try again or choose Auto detect.'})
+            await emit({'type':'response_end'});return
         if locale=='en-IN' and language.detect(transcript,None)=='hi-en':locale='hi-en'
         if not locale:
             trace.event('tts','skipped','unsupported_brain_language')
             await emit({'type':'text_only','text':text})
             await emit({'type':'audio_unavailable'});await emit({'type':'response_end'});return
-        await emit({'type':'reply','text':text,'language':locale,'aloud':reply_aloud,'segments':[{'text':part.get('text',''),'voice':voices.male(locale) if part.get('voice')=='m' else None} for part in (result.get('segments') or [{'text':text,'voice':'f'}])]})
+        await emit({'type':'reply','text':text,'language':locale,'aloud':reply_aloud,'segments':[{'text':part.get('text',''),'voice':(voices.male(locale) if locale.split('-')[0] in multilingual.GNANI else '__male__') if part.get('voice')=='m' else None} for part in (result.get('segments') or [{'text':text,'voice':'f'}])]})
         if not reply_aloud:
             await emit({'type':'text_only','text':text,'language':locale})
             await emit({'type':'response_end'});return
@@ -392,7 +413,7 @@ async def session(ws:WebSocket):
             pending=None
             async def render(item):
                 sentence,gender=item
-                voice=voices.male(locale) if gender=='m' else None
+                voice=(voices.male(locale) if locale.split('-')[0] in multilingual.GNANI else '__male__') if gender=='m' else None
                 return await synthesize(sentence,locale,voice=voice) if voice else await synthesize(sentence,locale)
             try:
                 for index,item in enumerate(jobs):
@@ -408,7 +429,7 @@ async def session(ws:WebSocket):
         except Exception as exc:
             trace.failure('tts',exc)
             await emit({'type':'text_only','text':text})
-            await emit({'type':'audio_unavailable'})
+            await emit({'type':'audio_unavailable','text':str(exc) if isinstance(exc,multilingual.SpeechError) else 'The speech service failed. Your text reply is still available.'})
         await emit({'type':'response_end'})
         if result.get('map') and location is None and not origin_asked:
             origin_asked=True
@@ -419,20 +440,22 @@ async def session(ws:WebSocket):
                 await emit({'type':'location_question','text':question,'language':result.get('lang','en')})
 
     async def turn(identity, *, audio=None,text=None,aloud=False):
-        nonlocal stage
+        nonlocal stage,turn_language
         request_id.set(identity)
         trace.begin_turn();clock=timing.Timing();timing.current.set(clock)
         try:
             if audio is not None:
                 if not mic_enabled:return
                 stage='stt';clock.mark('audio_received')
-                transcript,stt_lang=await transcribe(audio)
+                transcript,stt_lang=await transcribe(audio,preferred_language)
+                turn_language=preferred_language or language.detect(transcript,stt_lang)
                 audio=None
                 if not mic_enabled:return
                 if not transcript.strip():
                     await emit({'type':'stt_empty','text':'Speech recognition returned no words. Please try again.'});return
                 await emit({'type':'transcript','text':transcript,'language':language.detect(transcript,stt_lang)})
             else:
+                turn_language=None
                 clock.mark('text_received');transcript=(text or '').strip()[:2000]
                 if not transcript:return
                 await emit({'type':'transcript','text':transcript,'language':language.detect(transcript,None),'typed':True})
@@ -472,7 +495,9 @@ async def session(ws:WebSocket):
                 try:data=json.loads(msg['text'])
                 except ValueError:continue
                 kind=data.get('type')
-                if kind=='mic_state':
+                if kind=='language_preference':
+                    preferred_language=multilingual.canonical(data.get('language'))
+                elif kind=='mic_state':
                     mic_enabled=data.get('enabled') is True
                     if not mic_enabled and worker_voice and stage in ('stt','llm',None):
                         identity=worker_id

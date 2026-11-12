@@ -3,11 +3,12 @@ import os,re
 from pathlib import Path
 from dotenv import set_key
 V25={'en-IN':'Kaveri Trupti Devika Pranav Shlok Girish'.split(),'hi-IN':'Nalini Bhavna Yashvi Urmila Jwala Chitra Ambuja Deepak Roopesh Vikrant Hemraj Jalaj Omkar'.split(),'kn-IN':['Saanvi','Kavin'],'hi-en':['Poorvi']}
+V25.update({'ta-IN':['Asmita','Trisha','Brinda','Vedika','Noopur'],'te-IN':['Suhana','Lehara','Lavanya','Yukti','Varuni'],'ml-IN':['Reshma','Riyaan'],'mr-IN':['Zahira','Ishaan'],'bn-IN':['Kirra','Dhruva'],'gu-IN':['Falak','Veera'],'pa-IN':['Mehuli','Zayan']})
 V3='Shivani Lakshmi Kalpana Chetana Vasudha Riyaa Tarika Avinash Shubham Prakash Devansh Yashraj Harshad'.split()
 SAMPLES={'en':['Hello, I am here with you.','Please take your time, I am listening.','Walk for 150 m, then turn left.','Your tea costs ₹25 and takes 5 min.','We can visit Electronic City and Namma Metro.'],'hi':['नमस्ते, मैं आपके साथ हूँ।','आराम से बताइए, मैं सुन रही हूँ।','150 m चलिए, फिर बाएँ मुड़िए।','आपकी चाय ₹25 की है और 5 min लगेंगे।','हम Electronic City और Namma Metro जा सकते हैं।'],'kn':['ನಮಸ್ಕಾರ, ನಾನು ನಿಮ್ಮ ಜೊತೆಯಲ್ಲಿದ್ದೇನೆ.','ನಿಧಾನವಾಗಿ ಹೇಳಿ, ನಾನು ಕೇಳುತ್ತಿದ್ದೇನೆ.','150 m ನಡೆಯಿರಿ, ನಂತರ ಎಡಕ್ಕೆ ತಿರುಗಿ.','ನಿಮ್ಮ ಚಹಾಕ್ಕೆ ₹25 ಮತ್ತು 5 min ಬೇಕು.','ನಾವು Electronic City ಮತ್ತು Namma Metro ನೋಡಬಹುದು.']}
 def choices(model,lang):return V3 if model=='timbre-v3.0' else V25.get(lang,[])
 def settings(lang,voice=None,speed=None,model=None):
- suffix={'en-IN':'EN','hi-IN':'HI','kn-IN':'KN','hi-en':'MIXED'}.get(lang,'EN')
+ suffix={'en-IN':'EN','hi-IN':'HI','kn-IN':'KN','hi-en':'MIXED'}.get(lang,lang.split('-')[0].upper())
  model=model or os.getenv('GNANI_TTS_MODEL_'+suffix,os.getenv('GNANI_TTS_MODEL','timbre-v2.5'))
  if model not in ('timbre-v2.5','timbre-v3.0'):raise ValueError('unsupported_tts_model')
  voice=voice or os.getenv('GNANI_TTS_VOICE_'+suffix) or (os.getenv('GNANI_TTS_VOICE_V3','Shivani') if model=='timbre-v3.0' else choices(model,lang)[0])
@@ -25,7 +26,7 @@ def save(lang,voice,speed,model):
 
 
 def male(lang):
- suffix={'en-IN':'EN','hi-IN':'HI','kn-IN':'KN','hi-en':'MIXED'}.get(lang,'EN')
+ suffix={'en-IN':'EN','hi-IN':'HI','kn-IN':'KN','hi-en':'MIXED'}.get(lang,lang.split('-')[0].upper())
  model,normal,_=settings(lang)
  defaults={'en-IN':'Pranav','hi-IN':'Deepak','kn-IN':'Kavin'}
  fallback='Avinash' if model=='timbre-v3.0' else defaults.get(lang)

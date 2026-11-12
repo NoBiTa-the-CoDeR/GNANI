@@ -1,13 +1,24 @@
 """Language choices and short, localized service messages."""
 import re
+from backend.multilingual import canonical, NAMES
+from langid.langid import LanguageIdentifier, model
+_identifier=LanguageIdentifier.from_modelstring(model,norm_probs=True)
+_identifier.set_languages(list(NAMES))
 
 def detect(text, stt_language=None):
     """Use script and common code-mixing cues, with STT as a fallback hint."""
+    hint=canonical(stt_language)
+    if hint:return hint
+    # Unique scripts avoid misclassification of short Indian-language phrases.
+    for pattern,code in [(r'[\u0b80-\u0bff]','ta'),(r'[\u0c00-\u0c7f]','te'),(r'[\u0d00-\u0d7f]','ml'),(r'[\u0a80-\u0aff]','gu'),(r'[\u0a00-\u0a7f]','pa'),(r'[\u0980-\u09ff]','bn')]:
+        if re.search(pattern,text):return canonical(code)
     if re.search(r'[\u0c80-\u0cff]', text):
         return 'kn-IN'
     devanagari=bool(re.search(r'[\u0900-\u0963\u0966-\u097f]', text))
     latin=bool(re.search(r'[A-Za-z]', text))
     if devanagari:
+        code,_=_identifier.classify(text)
+        if not latin and code in ('mr','ne'):return canonical(code)
         return 'hi-en' if latin else 'hi-IN'
     words=set(re.findall(r'[a-z]+',text.lower()))
     hindi={'aap','aapko','mujhe','mera','meri','kaise','kaisa','hai','hain','hoon','ho','kya','chahiye','jaana','jana','accha','achha','bahut','namaste'}
@@ -18,18 +29,26 @@ def detect(text, stt_language=None):
     hindi.update({'batao','bataiye','banate','banao','karo','kijiye','gaana','suno','dikhaiye','dikhao','mujhko'})
     if words & hindi:
         return 'hi-en' if words & english else 'hi-IN'
-    if latin:
-        return 'en-IN'
+    greetings={'bonjour':'fr','salut':'fr','hola':'es','hallo':'de','guten':'de','ciao':'it','olá':'pt','obrigado':'pt','merhaba':'tr'}
+    for word,code in greetings.items():
+        if re.search(r'(?i)\b'+word+r'\b',text):return canonical(code)
+    if len(words & english)>=2 or re.search(r'(?i)\bhow do i\b|\bi want to\b',text):return 'en-IN'
+    if text.strip():
+        code,_=_identifier.classify(text)
+        return canonical(code) or 'en-IN'
     return stt_language if stt_language in ('hi-IN','en-IN','kn-IN','hi-en') else 'en-IN'
 
 def matches(text, lang):
     """Reject obvious wrong-script replies; this is not a language fluency classifier."""
-    if not text or not re.search(r'[A-Za-z\u0900-\u097f\u0c80-\u0cff]',text):
+    if not text or not any(c.isalpha() for c in text):
         return False
     if lang=='kn-IN': return bool(re.search(r'[\u0c80-\u0cff]',text))
     if lang=='hi-en': return bool(re.search(r'[\u0900-\u097f]',text))
     if lang=='hi-IN': return bool(re.search(r'[\u0900-\u097f]',text))
-    return not bool(re.search(r'[\u0900-\u097f\u0c80-\u0cff]',text))
+    code=lang.split('-')[0]
+    # For Latin-script languages, statistical detection is advisory on short replies.
+    detected=detect(text).split('-')[0]
+    return detected==code
 
 def retry_message(lang):
     return {'en-IN': 'Sorry, I could not reply in your language. Please try again.', 'hi-IN': 'माफ़ कीजिए, मैं आपकी भाषा में जवाब नहीं दे पाई। कृपया फिर पूछें।', 'hi-en': 'माफ़ कीजिए, मैं आपकी language में जवाब नहीं दे पाई। Please फिर पूछें।', 'kn-IN': 'ಕ್ಷಮಿಸಿ, ನಿಮ್ಮ ಭಾಷೆಯಲ್ಲಿ ಉತ್ತರಿಸಲು ಸಾಧ್ಯವಾಗಲಿಲ್ಲ. ದಯವಿಟ್ಟು ಮತ್ತೆ ಕೇಳಿ.'}.get(lang, 'Please try again.')

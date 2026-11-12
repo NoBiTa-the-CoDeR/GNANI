@@ -1,4 +1,5 @@
-import YouTubeSearch from './YouTubeSearch';
+import LanguagePicker from './LanguagePicker';
+import YouTubeSearch,{YouTubeFavourites} from './YouTubeSearch';
 import {RevealTitle,ColorWord,SectionTitle,FeatureHeading,EnterContent} from './TextDesign';
 import {Bell,Heart,ArrowDown,Users} from 'lucide-react';
 import {Welcome,GlassButton,QuestionBox,ThinkingLine,ReplyFeedback} from './Design';
@@ -43,7 +44,7 @@ function App(){
  return <div className="app"><EffectBackground signal={waveSignal}/><DebugOverlay voice={voice}/>
   <GuidanceBanner state={guidance.state} active={guidance.active} lang={lang} onEnd={endJourney}/>
   <header className="top"><div className="brand"><span className="brand-icon">✳</span><span>gNani<span className="brand-caption">Your everyday companion</span></span></div><CalmControl/><GlassButton className="people-open" aria-label="My people" onClick={()=>openPeople()}><Users size={22}/><span>My people</span></GlassButton></header>
-  <main><section className="stage" ref={orbSection}><div className="intro"><h1><span>Namaste! Main hoon</span>{' '}<ColorWord>gNani.</ColorWord></h1><p>Aap mujhe kuch bhi poochiye.</p></div>
+  <main><LanguagePicker/><section className="stage" ref={orbSection}><div className="intro"><h1><span>Namaste! Main hoon</span>{' '}<ColorWord>gNani.</ColorWord></h1><p>Aap mujhe kuch bhi poochiye.</p></div>
    <button ref={orb} className={'orb-button '+(voice.muted?'muted':voice.phase)} onClick={tapOrb} aria-label={voice.muted?'Unmute and talk':voice.capturing?'Interrupt or continue listening':'Start talking'}><EnhancedOrb voice={voice} signal={waveSignal}/></button>
    <div className="status"><span className="status-dot"/>{voice.muted?voice.privacy.muted:labels[voice.phase]}</div><div className="current-text" aria-live="polite" data-visible={!!voice.line||voice.phase==='thinking'}>{voice.phase==='thinking'?<ThinkingLine label={w.thinking}/>:voice.line}</div>
    {voice.reply&&!voice.speaking&&(voice.reply.typed||!voice.repliesAloud)&&<button className="listen-reply primary-action" onClick={voice.listenReply}>▶ {locale(lang)==='hi'?'सुनिए':locale(lang)==='kn'?'ಕೇಳಿ':'Listen'}</button>}
@@ -73,6 +74,7 @@ function App(){
   {keyboard&&<QuestionBox voice={voice} lang={locale(lang)} onClose={()=>setKeyboard(false)}/>}
 
   <nav className="privacy-controls" aria-label="Voice and keyboard controls"><VoiceControl voice={voice}/><button onClick={()=>setKeyboard(v=>!v)} aria-expanded={keyboard} aria-label="Keyboard"><Keyboard size={28}/><span>Keyboard</span></button>{voice.speaking&&<button className="stop-talking" onClick={voice.stopTalking}><Square size={22}/>Stop talking</button>}</nav>
+  <YouTubeFavourites stopVideoToken={stopVideoToken}/>
   <footer><span className="footer-message"><Heart size={20}/> A little less alone. A little more at home.</span><a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer">© OpenStreetMap contributors</a></footer>
  </div>
 }

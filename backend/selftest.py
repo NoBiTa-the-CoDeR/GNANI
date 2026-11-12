@@ -13,7 +13,7 @@ def install(app,brain):
   from backend.main import ConversationClient
   rows=[];audio=None
   def row(name,ok,detail,status=None,ms=None):rows.append(dict(name=name,pass_=ok,detail=detail,status=status,ms=ms))
-  for k in ('GNANI_API_KEY','GROQ_API_KEY','LOCATIONIQ_API_KEY','PIXABAY_API_KEY','YOUTUBE_API_KEY','JAMENDO_CLIENT_ID'):
+  for k in ('GNANI_API_KEY','GROQ_API_KEY','GEMINI_API_KEY','LOCATIONIQ_API_KEY','PIXABAY_API_KEY','YOUTUBE_API_KEY','JAMENDO_CLIENT_ID'):
    row(k,bool(os.getenv(k)),'present' if os.getenv(k) else 'missing')
   async def check(name,fn,valid):
    t=time.monotonic()
@@ -28,6 +28,10 @@ def install(app,brain):
   async with httpx.AsyncClient(timeout=20) as c:
    result,audio=await check_tts(c);row('Gnani TTS',result[0]=='OK',result[2],result[1])
    result=await check_stt(c,audio);row('Gnani STT',result[0]=='OK',result[2],result[1])
+   from backend import multilingual
+   if multilingual.enabled():
+    await check('Gemini extra-language TTS',lambda:multilingual.synthesize('Bonjour, je suis ici.', 'fr-FR'),lambda v:bool(v))
+   else:row('Gemini extra-language TTS',False,'Disabled: confirm a billing-disabled Free-tier project first')
    import sys
    for p in sys.modules['llm'].load_providers():
     async def probe(p=p):

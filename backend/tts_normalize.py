@@ -22,6 +22,9 @@ def number(s,lang):
  except (ValueError,IndexError):return s
 
 def normalize(text,lang='en',script='native'):
+ if lang.split('-')[0] not in ('en','hi','kn'):
+  from backend.multilingual import clean
+  return clean(text)
  lang=locale(lang);w=WORDS[lang];text=''.join(str(unicodedata.digit(c)) if c.isdecimal() else c for c in str(text))
  text=re.sub(r'```.*?```',' ',text,flags=re.S);text=re.sub(r'\[([^\]]+)\]\([^)]*\)',r'\1',text)
  text=re.sub(r'https?://\S+','',text);text=re.sub(r'(?m)^\s*(?:#{1,6}\s*|[-*•]\s+|\d+[.)]\s+)','',text)
@@ -40,7 +43,7 @@ def normalize(text,lang='en',script='native'):
 
 def sentences(text,lang='en',script='native'):
  text=normalize(text,lang,script);out=[]
- for part in re.split(r'(?<=[.!?।])\s+|\n+',text):
+ for part in re.split(r'(?<=[.!?।。！？])\s+|\n+',text):
   words=part.split()
   while words:
    take=min(20,len(words))
