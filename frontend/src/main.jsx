@@ -27,7 +27,7 @@ function App(){
  }});voiceRef.current=voice;
  const reminders=useReminders(voice,()=>setToday(readLocal(TODAY)));
  function openPeople(name=''){voice.mute();setAddName(name);setPeopleOpen(true)}
- function stopLocation(){controller.current?.stop()}
+ function stopLocation(){controller.current?.stop();positionRef.current=null;setPosition(null);voiceRef.current?.sendLocation(null);voiceRef.current?.send('journey_end')}
  function startLocation(){
   if(!controller.current)controller.current=createLocationController(navigator,p=>{positionRef.current=p;setPosition(p);voiceRef.current?.sendLocation(p);guidanceRef.current?.update(p)},setLocationStatus,reason=>{positionRef.current=null;setPosition(null);voiceRef.current?.send(reason==='denied'?'location_denied':'location_unavailable',{});guidanceRef.current?.update({lat:0,lon:0,accuracy:999})},state=>voiceRef.current?.send('location_permission',{state}));
   controller.current.start();
@@ -58,7 +58,7 @@ function App(){
   <CameraReader lang={lang} voice={voice} onReply={(text,language,aloud)=>{setLang(locale(language));voice.acceptExternalReply(text,language,aloud)}}/>
   <WebAssistant ref={webRef} lang={lang} voice={voice} onReply={(text,language,aloud)=>{setLang(locale(language));voice.acceptExternalReply(text,language,aloud)}} onPreference={value=>{webPreference.current=value;voice.send('web_preference',value)}}/>
   </div></section></EnterContent>
-  {mapData&&<MapSection key={mapKey} data={mapData} position={position} lang={lang} onClose={()=>setMapData(null)} onRoute={r=>{routeRef.current=r;guidance.acceptRoute(r)}} onStart={startWalking} onEnd={endJourney} guiding={guidance.active} guidanceState={guidance.state} onSpeak={voice.say} rerouteToken={guidance.rerouteToken}/>}
+  {mapData&&<MapSection onRequestLocation={startLocation} key={mapKey} data={mapData} position={position} lang={lang} onClose={()=>setMapData(null)} onRoute={r=>{routeRef.current=r;guidance.acceptRoute(r)}} onStart={startWalking} onEnd={endJourney} guiding={guidance.active} guidanceState={guidance.state} onSpeak={voice.say} rerouteToken={guidance.rerouteToken}/>}
   {music&&<MusicCard key={musicKey} request={music} lang={lang} voice={voice} signal={waveSignal} onClose={()=>setMusic(null)}/>}
   {actions.length>0&&<ActionCards key={actionsKey} actions={actions} aloud={actionsAloud} lang={lang} people={people} voice={voice} onAdd={openPeople} onChange={reminders.refresh} onHistory={()=>setToday(readLocal(TODAY))}/>}
   {panel&&<HelperPanel onTimer={(minutes,text)=>{schedule({kind:'timer',minutes,text},lang);reminders.refresh();voice.setError('Timer set. Reminders work while this app is open.')}} panel={panel} lang={lang} index={step} onStep={panelStep} onClose={()=>setPanel(null)} stopVideoToken={stopVideoToken}/>}

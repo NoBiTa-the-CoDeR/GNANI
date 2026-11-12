@@ -9,6 +9,7 @@ import math
 import os
 import re
 import sys
+import time
 from pathlib import Path
 
 from dotenv import load_dotenv
@@ -217,6 +218,8 @@ async def synthesize(text,lang,voice=None,speed=None,model=None,script='native')
     audio=sse_audio('\n'.join(lines));timing.mark('tts_complete')
     return [base64.b64encode(audio).decode('ascii')]
 
+from backend.geocoding_guard import install as install_geocoding_guard
+install_geocoding_guard(brain)
 install_api(app,brain,synthesize)
 from backend.youtube import install as install_youtube
 install_youtube(app,brain)
@@ -235,6 +238,9 @@ def needs_location(text):
 def gps_from(data):
     try:
         p=data['location'];lat=float(p['lat']);lon=float(p['lon'])
+        if p.get('timestamp') is not None:
+            age=time.time()*1000-float(p['timestamp'])
+            if not math.isfinite(age) or age>30000 or age < -5000:return None
         if not math.isfinite(lat) or not math.isfinite(lon) or not -90<=lat<=90 or not -180<=lon<=180:return None
         return {'lat':lat,'lon':lon}
     except (KeyError,TypeError,ValueError):return None
@@ -288,6 +294,7 @@ async def session(ws:WebSocket):
     async def get_first_location():
         nonlocal location_asked
         location_asked=True
+        location_event.clear()
         await emit({'type':'location_needed'})
         try:await asyncio.wait_for(location_event.wait(),22)
         except asyncio.TimeoutError:trace.event('location','error','timeout')
@@ -308,7 +315,7 @@ async def session(ws:WebSocket):
         # the model whether GPS exists. Add a temporary availability hint only.
         hint=None
         if location is not None and needs_location(transcript):
-            hint={'role':'system','content':'The current GPS location is available to the route tool. Search for the destination and use the route tool without asking the user for their starting location.'}
+            hint={'role':'system','content':('GPS accuracy is poor. Ask the user to pause safely. Do not announce turns until it improves. A rough route overview is okay.' if accuracy is not None and accuracy>50 else 'The current GPS location is available to the route tool. Search for the destination and use the route tool without asking the user for their starting location.')}
             history.append(hint)
         elif panel and panel_lang!=brain.detect_language(transcript) and re.search(r'(?i)how|kaise|कैसे|ಹೇಗೆ',transcript):
             hint={'role':'system','content':'The user has changed language. If answering about the visible helper topic, call show_panel again with all content translated into the latest user language. Include photo queries and a video query in that language.'}
@@ -514,8 +521,11 @@ async def session(ws:WebSocket):
                     if data.get('request_id') is not None and data['request_id']!=worker_id:continue
                     await cancel_worker()
                     await emit({'type':'turn_cancelled','reason':'interrupted','request_id':identity})
+                elif kind=='journey_end':
+                    location=None;accuracy=None;location_asked=False;origin_asked=False;location_event.clear()
                 elif kind=='location':
-                    location=gps_from(data);accuracy=gps_accuracy(data);location_event.set()
+                    location=gps_from(data);accuracy=gps_accuracy(data)
+                    if location is not None:location_event.set()
                     trace.event('location','ok' if location else 'none','position_received' if location else 'no_position')
                 elif kind=='location_permission':
                     state=data.get('state');trace.event('permission',state if state in ('granted','denied','prompt','unknown') else 'unknown')
@@ -528,6 +538,7 @@ async def session(ws:WebSocket):
                                 nav={'remaining_m':round(remaining),'remaining_min':round(minutes),'next_instruction':str(value.get('next_instruction',''))[:400],'destination':str(value.get('destination',''))[:160],'mode':'walk'}
                         except (KeyError,TypeError,ValueError):pass
                 elif kind in ('location_denied','location_unavailable'):
+                    location=None;accuracy=None
                     location_event.set();trace.event('location','denied' if kind=='location_denied' else 'unavailable')
                 elif kind=='text':
                     await cancel_worker()
@@ -560,8 +571,9 @@ if _client.is_dir():
         app.mount('/assets', StaticFiles(directory=_client / 'assets'), name='assets')
     @app.get('/{path:path}', include_in_schema=False)
     async def client_page(path: str):
-        if path == 'api' or path.startswith(('api/', 'ws')):
+        if path == 'api' or path.startswith(('api/', 'ws','backend/')):
             return JSONResponse({'detail': 'Not found'}, status_code=404)
+        if any(part.startswith('.') for part in Path(path).parts):return JSONResponse({'detail':'Not found'},status_code=404)
         candidate = (_client / path).resolve()
         if candidate.is_relative_to(_client.resolve()) and candidate.is_file():
             return FileResponse(candidate)

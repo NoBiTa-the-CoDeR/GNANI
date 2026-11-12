@@ -13,7 +13,7 @@ def install(app,brain):
   from backend.main import ConversationClient
   rows=[];audio=None
   def row(name,ok,detail,status=None,ms=None):rows.append(dict(name=name,pass_=ok,detail=detail,status=status,ms=ms))
-  for k in ('GNANI_API_KEY','GROQ_API_KEY','GEMINI_API_KEY','LOCATIONIQ_API_KEY','PIXABAY_API_KEY','YOUTUBE_API_KEY','JAMENDO_CLIENT_ID'):
+  for k in ('GNANI_API_KEY','GROQ_API_KEY','GEMINI_API_KEY','LOCATIONIQ_API_KEY','GEOAPIFY_API_KEY','PIXABAY_API_KEY','YOUTUBE_API_KEY','JAMENDO_CLIENT_ID'):
    row(k,bool(os.getenv(k)),'present' if os.getenv(k) else 'missing')
   async def check(name,fn,valid):
    t=time.monotonic()
@@ -42,7 +42,7 @@ def install(app,brain):
    await check('Jamendo',lambda:media('/api/music?q=calm&mood=calm'),lambda v:bool(v.get('tracks')))
    await check('YouTube',lambda:media('/api/videos?q=dosa%20recipe'),lambda v:bool(v.get('videos')))
    await check('Images',lambda:media('/api/images?q=masala%20dosa'),lambda v:bool(v if isinstance(v,list) else v.get('photos')))
-   places=await check('Geocoder',lambda:brain.search_place('Electronic City Bengaluru',c,None),lambda v:bool(v))
+   places=await check('Geocoder',lambda:brain.search_place('Electronic City Bengaluru',c,None),lambda v:bool(v.get('results')))
    # Fixed test points, never treated as the user's GPS.
    await check('Walking route (test coordinates)',lambda:brain.full_route({'lat':12.9765,'lon':77.5724},{'lat':12.975,'lon':77.573},'walk',c),lambda v:bool(v.get('coords')))
   return {'rows':rows,'audio':__import__('base64').b64encode(audio).decode() if audio else None,'songs_enabled':False}

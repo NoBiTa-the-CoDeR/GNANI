@@ -45,7 +45,7 @@ export function useVoiceSession(options){
   running.current=true;
   connecting.current=new Promise((resolve,reject)=>{
    const ws=new WebSocket(`${location.protocol==='https:'?'wss':'ws'}://${location.host}/api/session`);socket.current=ws;let opened=false;const timeout=setTimeout(()=>{if(!opened){reject(new Error('Connection timed out'));ws.close()}},8000);
-   ws.onopen=()=>{opened=true;clearTimeout(timeout);setActive(true);send('web_preference',opts.current.webPreferenceRef?.current||{enabled:false});send('mic_state',{enabled:!!stream.current&&!mutedRef.current});resolve()};
+   ws.onopen=()=>{opened=true;clearTimeout(timeout);setActive(true);send('web_preference',opts.current.webPreferenceRef?.current||{enabled:false});send('mic_state',{enabled:!!stream.current&&!mutedRef.current});send('location',{location:opts.current.positionRef.current||null});resolve()};
    ws.onerror=()=>{clearTimeout(timeout);setError('The voice service could not connect. Please try again.');reject(new Error('Connection unavailable'))};
    ws.onclose=()=>{clearTimeout(timeout);if(!opened)reject(new Error('Connection closed before opening'));connecting.current=null;if(running.current){setError('Connection lost. Please try again.');phaseTo(mutedRef.current?'muted':'idle')}};
    ws.onmessage=e=>{
@@ -113,7 +113,7 @@ export function useVoiceSession(options){
   const okay=await start();if(!okay)mute();return okay;
  }
  async function sendText(text){
-  const value=text.trim();if(!value)return;setError('');await connect();stopTalking();const identity=String(++sequence.current);currentId.current=identity;voiceTurn.current=false;awaiting.current=true;setRaw(value);setLine('');phaseTo('thinking');latest.current=[];send('text',{request_id:identity,text:value,aloud:false});
+  const value=text.trim();if(!value)return;setError('');await connect();stopTalking();const identity=String(++sequence.current);currentId.current=identity;voiceTurn.current=false;awaiting.current=true;setRaw(value);setLine('');phaseTo('thinking');latest.current=[];send('location',{location:opts.current.positionRef.current||null});send('text',{request_id:identity,text:value,aloud:false});
  }
  function cancelGuidance(){guidanceEpoch.current++;queue.current=queue.current.filter(x=>!x.template);if(playingTemplate.current)player.current?.pause()}
  function interrupt(){send('interrupt',{request_id:currentId.current});currentId.current=null;queue.current=[];fadeOut(150);awaiting.current=false;idle()}

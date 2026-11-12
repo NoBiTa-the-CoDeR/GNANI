@@ -23,6 +23,7 @@ class RouteInput(BaseModel):
     origin: Optional[Point] = None
     dest: Optional[Point] = None
     destination: str = Field(default='', max_length=160)
+    origin_name: str = Field(default='', max_length=160)
     mode: Literal['walk','drive'] = 'walk'
 
 class SpeechInput(BaseModel):
@@ -90,7 +91,7 @@ class ObservedClient(httpx.AsyncClient):
             lat,lon=self.origin_bias['lat'],self.origin_bias['lon']
             params['viewbox']=f'{max(-180,lon-.3)},{max(-90,lat-.3)},{min(180,lon+.3)},{min(90,lat+.3)}'
             kwargs['params']=params
-        provider={'pixabay.com':'Pixabay','commons.wikimedia.org':'Wikimedia Commons','www.googleapis.com':'YouTube','api.pexels.com':'Pexels'}.get(host,'LocationIQ' if host.endswith('.locationiq.com') else 'Jamendo' if host=='api.jamendo.com' else 'navigation')
+        provider={'pixabay.com':'Pixabay','commons.wikimedia.org':'Wikimedia Commons','www.googleapis.com':'YouTube','api.pexels.com':'Pexels','api.geoapify.com':'Geoapify'}.get(host,'LocationIQ' if host.endswith('.locationiq.com') else 'Jamendo' if host=='api.jamendo.com' else 'navigation')
         try:
             r=await super().get(url,**kwargs)
             if r.status_code>=400 and not(provider=='LocationIQ' and r.status_code==404):self.failures.append({'source':provider,'status':r.status_code,'message':r.reason_phrase})
@@ -113,8 +114,14 @@ def install(app,brain,synthesize):
         dest=body.dest.model_dump() if body.dest else None
         try:
             async def calculate():
-                nonlocal dest
+                nonlocal dest,origin
                 async with ObservedClient(timeout=12,origin_bias=origin) as client:
+                    if not origin and body.origin_name.strip():
+                        found_origin=await brain.search_place(body.origin_name.strip(),client,None)
+                        origins=found_origin.get('results',[])
+                        if len(origins)>1:return {'origin_candidates':origins,'source':found_origin.get('source'),'dest':dest,'message':'Which starting place do you mean?'}
+                        if not origins:return JSONResponse({'error':'origin_not_found','message':'I could not find your starting place. Try the area and city, or a nearby landmark.','failures':client.failures},status_code=502 if found_origin.get('error') else 404)
+                        origin={'lat':origins[0]['lat'],'lon':origins[0]['lon']}
                     if not dest:
                         if not body.destination.strip():raise HTTPException(422,'Please tell me the destination or a nearby landmark.')
                         found=await brain.search_place(body.destination.strip(),client,origin)
@@ -123,7 +130,7 @@ def install(app,brain,synthesize):
                             matches.sort(key=lambda p:(p['lat']-origin['lat'])**2+((p['lon']-origin['lon'])*math.cos(math.radians(origin['lat'])))**2)
                         if len(matches)>1:return {'candidates':matches,'source':found.get('source'),'message':'Which one do you mean?'}
                         if not matches:
-                            if client.failures:return JSONResponse({'error':'geocoding_failed','message':'The place search failed. Please try a nearby landmark.','failures':client.failures},status_code=502)
+                            if client.failures or found.get('error'):return JSONResponse({'error':'geocoding_failed','message':'The place search failed. Please try a nearby landmark.','failures':client.failures},status_code=502)
                             return JSONResponse({'error':'place_not_found','message':'I could not find that place. Please tell me a nearby landmark.'},status_code=404)
                         dest={'lat':matches[0]['lat'],'lon':matches[0]['lon']}
                     if not origin:return JSONResponse({'error':'location_unavailable','dest':dest,'message':'Where are you now? Tell me your area or a nearby landmark.'},status_code=409)
