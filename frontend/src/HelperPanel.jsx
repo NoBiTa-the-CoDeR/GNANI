@@ -1,3 +1,4 @@
+import {RevealTitle} from './TextDesign';
 import {Ingredient,ProgressSteps,LoadingStatus} from './Polish';
 import {stepMinutes} from './duration';
 import React,{useEffect,useRef,useState} from 'react';import {t,calmScroll,locale} from './i18n';import {imageQueries,videoQuery} from './content';
@@ -14,7 +15,7 @@ export default function HelperPanel({panel,lang,index,onStep,onClose,stopVideoTo
  useEffect(()=>{if(index>0)calmScroll(cards.current[index])},[index]);
  useEffect(()=>setPlaying(null),[stopVideoToken]);
  return <section className="content-section helper-section" ref={section} aria-label={w.helpful}>
-  <div className="section-heading"><div><p className="section-kicker">{w.helpful}</p><h2>{panel.title}</h2></div><button aria-label="Close helper panel" onClick={onClose}>×</button></div>
+  <div className="section-heading"><div><p className="section-kicker">{w.helpful}</p><h2><RevealTitle>{panel.title}</RevealTitle></h2></div><button aria-label="Close helper panel" onClick={onClose}>×</button></div>
   {panel.summary&&<p>{panel.summary}</p>}
   {panel.kind==='health'&&<p className="health-note">{w.health}</p>}
   {loading&&<div className="photo-row skeleton-row" role="status" aria-label="Loading photos"><LoadingStatus text={locale(lang)==='en'?'Loading photos…':'…'}/><div/><div/></div>}

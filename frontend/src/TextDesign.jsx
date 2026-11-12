@@ -1,0 +1,11 @@
+import React,{lazy,Suspense} from 'react';import {useEffects} from './Effects';
+const BlurText=lazy(()=>import('./components/reactbits/BlurText'));
+const GradientText=lazy(()=>import('./components/reactbits/GradientText'));
+const SpotlightCard=lazy(()=>import('./components/reactbits/SpotlightCard'));
+const AnimatedContent=lazy(()=>import('./components/reactbits/AnimatedContent'));
+export function RevealTitle({children,className=''}){const {enabled}=useEffects();return <span className={'reveal-title '+className}>{enabled?<Suspense fallback={<span>{children}</span>}><BlurText text={children} delay={35} blur={5} distance={10} stepDuration={.16}/></Suspense>:children}</span>}
+export function ColorWord({children}){const {enabled}=useEffects();return enabled?<Suspense fallback={<span>{children}</span>}><GradientText className="color-word" colors={['#ffffff','#b5eaff','#b4c4ff','#ffffff']} animationSpeed={12}>{children}</GradientText></Suspense>:<span className="color-word">{children}</span>}
+export function Surface({children,className='',...props}){const {enabled}=useEffects();return enabled?<Suspense fallback={<div className={'editorial-surface '+className} {...props}>{children}</div>}><SpotlightCard spotlightColor="rgba(130,190,255,0.28)" intensity={.18} borderGlow={.35} className={'editorial-surface '+className} {...props}>{children}</SpotlightCard></Suspense>:<div className={'editorial-surface '+className} {...props}>{children}</div>}
+export function EnterContent({children}){const {enabled}=useEffects();return enabled?<Suspense fallback={children}><AnimatedContent distance={18} duration={.4} initialOpacity={.4} once>{children}</AnimatedContent></Suspense>:children}
+export function FeatureHeading({number,icon,title,description}){return <><span className="feature-leading" aria-hidden="true">{icon}</span><span className="feature-copy"><span className="feature-number">{number}</span><strong>{title}</strong><span>{description}</span></span><span className="feature-go" aria-hidden="true">↗</span></>}
+export function SectionTitle({eyebrow,children}){return <div className="editorial-heading"><p className="editorial-eyebrow">{eyebrow}</p><h2><RevealTitle>{children}</RevealTitle></h2></div>}
