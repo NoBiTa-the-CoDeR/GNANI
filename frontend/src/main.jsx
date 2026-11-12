@@ -1,3 +1,4 @@
+import YouTubeSearch from './YouTubeSearch';
 import {RevealTitle,ColorWord,SectionTitle,FeatureHeading,EnterContent} from './TextDesign';
 import {Bell,Heart,ArrowDown,Users} from 'lucide-react';
 import {Welcome,GlassButton,QuestionBox,ThinkingLine,ReplyFeedback} from './Design';
@@ -60,6 +61,7 @@ function App(){
   {music&&<MusicCard key={musicKey} request={music} lang={lang} voice={voice} signal={waveSignal} onClose={()=>setMusic(null)}/>}
   {actions.length>0&&<ActionCards key={actionsKey} actions={actions} aloud={actionsAloud} lang={lang} people={people} voice={voice} onAdd={openPeople} onChange={reminders.refresh} onHistory={()=>setToday(readLocal(TODAY))}/>}
   {panel&&<HelperPanel onTimer={(minutes,text)=>{schedule({kind:'timer',minutes,text},lang);reminders.refresh();voice.setError('Timer set. Reminders work while this app is open.')}} panel={panel} lang={lang} index={step} onStep={panelStep} onClose={()=>setPanel(null)} stopVideoToken={stopVideoToken}/>}
+  <YouTubeSearch lang={lang} stopVideoToken={stopVideoToken}/>
   <section className="local-notes content-section"><details><summary><FeatureHeading number="03 / YOUR DAY" icon={<Bell size={30}/>} title="Reminders & activity" description="Your plans, saved on this phone"/></summary><p>Reminders work while the app is open. They may be late if your phone sleeps. This app cannot reliably alert you after it is closed.</p><button onClick={reminders.enable}>Enable notifications</button>{reminders.notice&&<p role="status">{reminders.notice}</p>}{reminders.entries.filter(x=>x.status==='pending').map(x=><article key={x.id}><p>{x.text} — {new Date(x.at).toLocaleTimeString()}</p><button onClick={()=>reminders.cancel(x.id)}>Cancel reminder</button></article>)}<h3>What I did today</h3>{today.filter(x=>new Date(x.at).toDateString()===new Date().toDateString()).map((x,i)=><p key={i}>{new Date(x.at).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})}: {x.text}</p>)}</details></section>
   <ReplyFeedback text="gNani experience" experience/>
   </main>

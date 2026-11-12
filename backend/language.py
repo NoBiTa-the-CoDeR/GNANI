@@ -12,6 +12,10 @@ def detect(text, stt_language=None):
     words=set(re.findall(r'[a-z]+',text.lower()))
     hindi={'aap','aapko','mujhe','mera','meri','kaise','kaisa','hai','hain','hoon','ho','kya','chahiye','jaana','jana','accha','achha','bahut','namaste'}
     english={'hello','hi','how','are','you','the','what','is','and','please','weather','today','coffee','like','my','can','help'}
+    kannada={'hegiddira','hegide','namaskara','beku','maadi','helಿ','hel kodi','hogi'}
+    if words & kannada:
+        return 'kn-IN'
+    hindi.update({'batao','bataiye','banate','banao','karo','kijiye','gaana','suno','dikhaiye','dikhao','mujhko'})
     if words & hindi:
         return 'hi-en' if words & english else 'hi-IN'
     if latin:
@@ -23,7 +27,7 @@ def matches(text, lang):
     if not text or not re.search(r'[A-Za-z\u0900-\u097f\u0c80-\u0cff]',text):
         return False
     if lang=='kn-IN': return bool(re.search(r'[\u0c80-\u0cff]',text))
-    if lang=='hi-en': return bool(re.search(r'[\u0900-\u097f]',text)) and bool(re.search(r'[A-Za-z]',text))
+    if lang=='hi-en': return bool(re.search(r'[\u0900-\u097f]',text))
     if lang=='hi-IN': return bool(re.search(r'[\u0900-\u097f]',text))
     return not bool(re.search(r'[\u0900-\u097f\u0c80-\u0cff]',text))
 

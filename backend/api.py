@@ -165,8 +165,8 @@ def install(app,brain,synthesize):
                                 photo['url']='/api/photo/'+identity
                         value={'photos':photos,'source':photos[0].get('source') if photos else None,'failures':client.failures if not photos else []}
                     else:
-                        value=await asyncio.wait_for(brain.video_search(q,client),12)
-                        value['videos']=value.get('videos',[])[:2]
+                        value=await asyncio.wait_for(brain.video_search(q,client,limit=6),12)
+                        value['videos']=value.get('videos',[])[:6]
                         if not value['videos'] and client.failures:value['failures']=client.failures
             except Exception as exc:
                 trace.failure(kind,exc)

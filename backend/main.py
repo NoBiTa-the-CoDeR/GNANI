@@ -321,6 +321,24 @@ async def session(ws:WebSocket):
             if hint is not None:
                 history.remove(hint)
             history.remove(language_hint)
+        # Repair only wrong-language prose; never repeat tool calls or invent facts.
+        expected_locale=user_locale
+        if result.get('text') and not result.get('error') and not language.matches(result['text'],expected_locale):
+            try:
+                async with ConversationClient(timeout=10) as client:
+                    repaired=await brain.llm.chat([
+                        {'role':'system','content':language_hint['content']+' Translate the supplied reply only. Preserve every fact, distance and name. Return plain text; do not call tools.'},
+                        {'role':'user','content':result['text']}],tools=None,client=client)
+                corrected=brain.clean(repaired.get('content'))
+                if language.matches(corrected,expected_locale):
+                    result['text']=corrected
+                    result['segments']=[{'voice':'f','text':corrected}]
+                    if history and history[-1].get('role')=='assistant':history[-1]['content']=corrected
+                    trace.event('language','repaired',expected_locale)
+            except Exception:
+                trace.event('language','repair_failed',expected_locale)
+        if result.get('text') and language.matches(result['text'],expected_locale):
+            result['lang']={'en-IN':'en','hi-IN':'hi','hi-en':'hi','kn-IN':'kn'}[expected_locale]
         timing.mark('llm_complete')
         err=result.get('error')
         # Preserve a completed visual tool result when a free provider fails
