@@ -47,7 +47,6 @@ function App(){
    <div className="status"><span className="status-dot"/>{voice.muted?voice.privacy.muted:labels[voice.phase]}</div><div className="current-text" aria-live="polite" data-visible={!!voice.line||voice.phase==='thinking'}>{voice.phase==='thinking'?<ThinkingLine label={w.thinking}/>:voice.line}</div>
    {voice.reply&&!voice.speaking&&(voice.reply.typed||!voice.repliesAloud)&&<button className="listen-reply primary-action" onClick={voice.listenReply}>▶ {locale(lang)==='hi'?'सुनिए':locale(lang)==='kn'?'ಕೇಳಿ':'Listen'}</button>}
    {voice.raw&&<div className="transcript"><span>{locale(lang)==='hi'?'आपने कहा':locale(lang)==='kn'?'ನೀವು ಹೇಳಿದ್ದು':'You said'}</span><p>{voice.raw}</p></div>}
-   {voice.reply?.text&&voice.phase!=='thinking'&&<ReplyFeedback key={voice.reply.text} text={voice.reply.text}/>}
    {voice.error&&<p className="error" role="alert">{voice.error}</p>}
    {hint&&<button className="below-hint" onClick={()=>calmScroll(document.querySelector(hint===w.mapBelow?'.journey-section':'.helper-section'))}>↓ {hint}</button>}
    {(mapData||journeyRequested)&&locationStatus&&<p className="location-status"><MapPin size={22}/>{locationStatus}</p>}
@@ -62,6 +61,7 @@ function App(){
   {actions.length>0&&<ActionCards key={actionsKey} actions={actions} aloud={actionsAloud} lang={lang} people={people} voice={voice} onAdd={openPeople} onChange={reminders.refresh} onHistory={()=>setToday(readLocal(TODAY))}/>}
   {panel&&<HelperPanel onTimer={(minutes,text)=>{schedule({kind:'timer',minutes,text},lang);reminders.refresh();voice.setError('Timer set. Reminders work while this app is open.')}} panel={panel} lang={lang} index={step} onStep={panelStep} onClose={()=>setPanel(null)} stopVideoToken={stopVideoToken}/>}
   <section className="local-notes content-section"><details><summary><FeatureHeading number="03 / YOUR DAY" icon={<Bell size={30}/>} title="Reminders & activity" description="Your plans, saved on this phone"/></summary><p>Reminders work while the app is open. They may be late if your phone sleeps. This app cannot reliably alert you after it is closed.</p><button onClick={reminders.enable}>Enable notifications</button>{reminders.notice&&<p role="status">{reminders.notice}</p>}{reminders.entries.filter(x=>x.status==='pending').map(x=><article key={x.id}><p>{x.text} — {new Date(x.at).toLocaleTimeString()}</p><button onClick={()=>reminders.cancel(x.id)}>Cancel reminder</button></article>)}<h3>What I did today</h3>{today.filter(x=>new Date(x.at).toDateString()===new Date().toDateString()).map((x,i)=><p key={i}>{new Date(x.at).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})}: {x.text}</p>)}</details></section>
+  <ReplyFeedback text="gNani experience" experience/>
   </main>
   {peopleOpen&&<MyPeople voice={voice} initialName={addName} onClose={()=>setPeopleOpen(false)} onChange={setPeople}/>}
   {reminders.alert&&<aside className="reminder-alert" role="alertdialog" aria-label="Your reminder"><h2>Your reminder</h2><p>{reminders.alert.text}</p><button onClick={reminders.dismiss}>Done</button></aside>}

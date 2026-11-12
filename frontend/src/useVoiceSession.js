@@ -65,7 +65,7 @@ export function useVoiceSession(options){
   }).finally(()=>connecting.current=null);
   return connecting.current;
  }
- function releaseMic(){if(diagnostics.current.lowNotice)setError('');diagnostics.current.lowSince=0;diagnostics.current.lowNotice=false;eraseCapture.current();processor.current?.disconnect();source.current?.disconnect();processor.current=null;source.current=null;stream.current?.getTracks().forEach(track=>track.stop());stream.current=null;setCapturing(false);userSpeech.current=false;setUserSpeaking(false)}
+ function releaseMic(){diagnostics.current.lowSince=0;diagnostics.current.lowNotice=false;eraseCapture.current();processor.current?.disconnect();source.current?.disconnect();processor.current=null;source.current=null;stream.current?.getTracks().forEach(track=>track.stop());stream.current=null;setCapturing(false);userSpeech.current=false;setUserSpeaking(false)}
  async function capture(){
   if(stream.current||mutedRef.current)return;
   const media=await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:true,noiseSuppression:true,autoGainControl:true}});
@@ -78,9 +78,9 @@ export function useVoiceSession(options){
    const frame=new Float32Array(e.inputBuffer.getChannelData(0)),rms=Math.sqrt(frame.reduce((a,b)=>a+b*b,0)/frame.length),duration=frame.length/c.sampleRate;
    const now=performance.now(),d=diagnostics.current;
    Object.assign(d,{level:rms,vad:speech?'speech':silence?'silence':'idle',audioContext:c.state,websocket:socket.current?.readyState,secondsLow:d.lowSince?(now-d.lowSince)/1000:0});
-   if(rms>.018||playing.current||awaiting.current){d.lowSince=0;if(d.lowNotice){d.lowNotice=false;setError('')}}
+   if(rms>.018||playing.current||awaiting.current)d.lowSince=0;
    else if(!d.lowSince)d.lowSince=now;
-   if(d.lowSince&&now-d.lowSince>=8000&&now-d.lastTranscript>=8000){d.lowNotice=true;setError('I cannot hear you. Please speak a little closer.')};
+   // Silence is a normal listening state, not evidence of a microphone failure.
    if(now-d.lastLog>1000){d.lastLog=now;console.info('[gNani mic]',{level:Number(rms.toFixed(4)),vad:d.vad,low_ms:Math.round(d.secondsLow*1000),websocket:d.websocket,audioContext:d.audioContext})}
    const output=player.current,outputTime=output?.currentTime??referenceTime.current;
    if((playing.current||performance.now()-lastOutputAt.current<400)&&isEcho(frame,reference.current,outputTime,c.sampleRate)){if(!speech){pre=[];barge=0}return}
