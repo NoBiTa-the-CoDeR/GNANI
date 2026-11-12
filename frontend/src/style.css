@@ -39,5 +39,5 @@ html,html[data-theme]{background:#000}.app{background:transparent!important}.app
 /* Black beneath the transparent ASCII field, including the bottom bar. */
 .privacy-controls,footer{background:#000;color:#fff!important;backdrop-filter:none}.privacy-controls{border-top-color:#333}footer a{color:#fff}
 
-/* The selected crystal ball replaces the old gold orb and its backing disc. */
-.orb-button{background:transparent;box-shadow:none;border-radius:0}.orb-button.muted .crystalized-ball{filter:saturate(.15)}.orb-button .css-orb{background:radial-gradient(circle at 35% 25%,#cdd6e6,#367ffc 45%,#0055ff 80%);box-shadow:0 0 40px #1198fe66}
+/* The selected Strands orb replaces the old gold orb and its backing disc. */
+.orb-button{background:transparent;box-shadow:none;border-radius:0}.orb-button .css-orb{background:radial-gradient(circle at 35% 25%,#c8fff0,#00c2a8 45%,#2f6bff 80%);box-shadow:0 0 40px #1198fe66}
