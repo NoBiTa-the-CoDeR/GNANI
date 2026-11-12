@@ -155,6 +155,8 @@ async def traced_tool(*args, **kwargs):
 brain.run_tool = traced_tool
 
 app=FastAPI()
+from backend.hearts import install as install_hearts
+install_hearts(app)
 from backend.selftest import install as install_selftest
 install_selftest(app,brain)
 app.add_middleware(CORSMiddleware,allow_origins=['http://localhost:5173','http://127.0.0.1:5173'],allow_methods=['*'],allow_headers=['*'])
