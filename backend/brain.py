@@ -16,7 +16,7 @@ LANGUAGE: Reply in the SAME language and script as the user's latest message.
 English in -> English out. Hindi (Devanagari) -> Hindi. Kannada -> Kannada.
 Romanized Hindi/Hinglish -> reply in simple Romanized Hindi. If the user switches, switch.
 
-STYLE: You are spoken aloud. Use 1-3 short, warm sentences. No lists, markdown,
+STYLE: You are spoken aloud. By default use 1-3 short, warm sentences. BUT when she asks for something long (a story, a poem, reading something out, a detailed explanation, a recipe told step by step) speak for as long as it needs, in natural paragraphs of short sentences, with no length cap. No lists, markdown,
 emojis or symbols. Sound like a kind family member. Offer more only if useful.
 
 DIRECTIONS: Only when the user wants to go somewhere, use the tools. ALWAYS call show_map
@@ -45,7 +45,18 @@ HUMAN VOICE: Talk like a warm real person, not a chatbot. Use everyday spoken wo
 and natural little reactions ("achha", "oh, I see") but vary them and do not start every reply the
 same way. Match her mood: gentle if she sounds worried, cheerful if she is happy. Ask at most one
 question at a time. Never mention being an AI unless sincerely asked.
-MUSIC: When she wants music or a song, call play_music. Use 'youtube' when she names a particular
+VOICES: Your own voice is female. When telling a story or quoting a man or boy, put those words between
+[[M]] and [[/M]] so a male voice is used, and between [[F]] and [[/F]] for a woman or girl. Use the tags
+only for such quoted speech, never for normal talking.
+THEMES: At the start of every new topic call set_theme so the screen matches (cooking, music, travel,
+health, devotional, story, learning). Return to default for ordinary chat.
+SINGING: When she asks you to sing, call compose_song with ORIGINAL lyrics you write, a clear style
+(genre, mood, tempo, instruments) and the vocal she wants (male or female). Never name real artists in
+the style. If she asks for a specific song by a real artist, or for a real singer's voice, kindly say you
+cannot copy another singer's song or voice, then offer (a) to play the real song with play_music source
+'youtube', or (b) to compose a new original song in a similar mood. Never write out lyrics of existing songs.
+If compose_song reports it is not configured, fall back to play_music with source 'generated'.
+MUSIC: When she wants music or a song, call play_music (source 'stop' to stop it). Use 'youtube' when she names a particular
 song or singer, 'library' for calm or background music, 'generated' for soft instrumental or when
 you offer to sing a traditional lullaby or folk song. NEVER write out lyrics of copyrighted songs;
 offer to play the real song instead. Say honestly that you are speaking the song with music, not
@@ -61,6 +72,30 @@ If sincerely asked, say you are an AI companion."""
 
 TOOLS = [
     {"type": "function", "function": {
+        "name": "set_theme",
+        "description": "Change the look of the whole screen to match the topic. Call this at the START of "
+                       "any new topic: cooking/recipes -> cooking, songs/music -> music, directions -> travel, "
+                       "health -> health, bhajans/prayer -> devotional, stories/kids -> story, learning -> learning, "
+                       "otherwise default.",
+        "parameters": {"type": "object", "properties": {"theme": {"type": "string", "enum": [
+            "default", "cooking", "music", "travel", "health", "devotional", "story", "learning"]}},
+            "required": ["theme"]}}},
+    {"type": "function", "function": {
+        "name": "compose_song",
+        "description": "Compose a complete ORIGINAL song with real AI vocals when she asks you to sing. You write "
+                       "original lyrics. Describe style by genre, mood, tempo and instruments only. NEVER name real "
+                       "artists, never imitate a real singer's voice, never use lyrics from existing songs.",
+        "parameters": {"type": "object", "properties": {
+            "title": {"type": "string"},
+            "style": {"type": "string", "description": "e.g. 'warm acoustic pop ballad, gentle guitar, slow tempo'"},
+            "vocal": {"type": "string", "enum": ["male", "female"]},
+            "language": {"type": "string", "description": "language of the lyrics"},
+            "mood": {"type": "string"},
+            "lyrics": {"type": "string", "description": "original lyrics, one line per row, up to 30 lines, "
+                       "with [Verse]/[Chorus] markers"},
+            "length_sec": {"type": "integer", "description": "30-180"}},
+            "required": ["title", "style", "vocal", "lyrics"]}}},
+    {"type": "function", "function": {
         "name": "play_music",
         "description": "Play music or a song for the user, or sing a short traditional song. source: "
                        "'library' = free royalty-free music (calm, instrumental, devotional-style); "
@@ -68,7 +103,7 @@ TOOLS = [
                        "video); 'generated' = soft instrumental made on the device, optionally with a short "
                        "traditional/public-domain lullaby or folk song spoken rhythmically.",
         "parameters": {"type": "object", "properties": {
-            "source": {"type": "string", "enum": ["library", "youtube", "generated"]},
+            "source": {"type": "string", "enum": ["library", "youtube", "generated", "stop"]},
             "query": {"type": "string", "description": "search phrase, e.g. 'Kishore Kumar songs' or 'calm flute'"},
             "mood": {"type": "string", "description": "e.g. calm, happy, devotional, sleepy"},
             "sing_text": {"type": "string", "description": "ONLY for source=generated: up to 8 lines of a "
@@ -130,6 +165,33 @@ OSRM = {"walk": ("foot", os.getenv("OSRM_FOOT_URL", "https://routing.openstreetm
         "drive": ("driving", os.getenv("OSRM_CAR_URL", "https://routing.openstreetmap.de/routed-car"))}
 UA = os.getenv("NOMINATIM_USER_AGENT", "gNani-voice-assistant/0.1 (contact: set-your-email)")
 _nom_lock, _last_nom = asyncio.Lock(), 0.0
+
+
+IMITATION = re.compile(r"\b(in the (voice|style) of|sounds? like|sing like|mimic\w*|impersonat\w*|"
+                       r"cover of|clone\w*|voice of)\b", re.I)
+VOICE_TAG = re.compile(r"(\[\[/?[MF]\]\])")
+THEMES = ("default", "cooking", "music", "travel", "health", "devotional", "story", "learning")
+
+
+def split_voices(text):
+    """'Hello [[M]]Come here[[/M]] she said' -> [('f','Hello'),('m','Come here'),('f','she said')]"""
+    out, voice = [], "f"
+    for part in VOICE_TAG.split(text or ""):
+        tag = part.upper()
+        if tag in ("[[M]]", "[[F]]"):
+            voice = tag[2].lower()
+        elif tag in ("[[/M]]", "[[/F]]"):
+            voice = "f"
+        elif part.strip():
+            if out and out[-1]["voice"] == voice:
+                out[-1]["text"] += " " + part.strip()
+            else:
+                out.append({"voice": voice, "text": part.strip()})
+    return out
+
+
+def strip_voice_tags(text):
+    return re.sub(r"\s+", " ", VOICE_TAG.sub(" ", text or "")).strip()
 
 
 def detect_language(text):
@@ -250,8 +312,31 @@ async def run_tool(name, args, location, client, sink=None):
                              "ingredients": lst("ingredients", 20),
                              "steps": lst("steps", 12), "tips": lst("tips", 5)}
             return {"shown": True}
+        if name == "set_theme":
+            theme = args.get("theme") if args.get("theme") in THEMES else "default"
+            sink["theme"] = theme
+            return {"theme": theme}
+        if name == "compose_song":
+            if os.getenv("SONGS_ENABLED") != "1" or not (os.getenv("GEMINI_API_KEY") or os.getenv("ELEVENLABS_API_KEY")):
+                return {"error": "song_service_not_configured"}
+            style, title = clean(str(args.get("style") or ""))[:200], clean(str(args.get("title") or ""))[:80]
+            if IMITATION.search(style) or IMITATION.search(title):
+                return {"error": "no_artist_imitation",
+                        "hint": "describe genre, mood, tempo and instruments instead of any real singer"}
+            lines = [clean(x)[:200] for x in str(args.get("lyrics") or "").splitlines() if clean(x)][:30]
+            if not lines:
+                return {"error": "lyrics_required"}
+            try:
+                length = min(180, max(30, int(args.get("length_sec") or 120)))
+            except (TypeError, ValueError):
+                length = 120
+            sink["song"] = {"title": title, "style": style,
+                            "vocal": "male" if args.get("vocal") == "male" else "female",
+                            "language": clean(str(args.get("language") or ""))[:30],
+                            "mood": clean(str(args.get("mood") or ""))[:40], "lyrics": lines, "length_sec": length}
+            return {"started": True, "note": "composing takes about a minute; tell her it is being made"}
         if name == "play_music":
-            src = args.get("source") if args.get("source") in ("library", "youtube", "generated") else "library"
+            src = args.get("source") if args.get("source") in ("library", "youtube", "generated", "stop") else "library"
             music = {"source": src, "query": clean(str(args.get("query") or ""))[:100],
                      "mood": clean(str(args.get("mood") or ""))[:40]}
             if src == "generated" and args.get("sing_text"):
@@ -429,12 +514,111 @@ def clean(text):
     return re.sub(r"\s+", " ", text).strip()
 
 
+# ---------- rule-based backup so key features still work if the LLM fails or ignores its tools ----------
+MUSIC_WORDS = re.compile(r"\b(songs?|music|gaan[ae]|gana|bhajans?|lullab(?:y|ies)|tracks?|playlist|sangeet)\b|"
+                         r"गाना|गाने|गीत|संगीत|म्यूज़िक|म्यूजिक|भजन|लोरी|ಹಾಡು|ಹಾಡನ್ನು|ಸಂಗೀತ|ಭಜನೆ", re.I)
+ACTION_CUE = re.compile(r"\b(play|put on|start|listen|hear|want|wanna|need|give me|bajao|bajaao|baja|laga|lagao|"
+                        r"chalao|chala|sunao|suna|sunna|chahiye|dalo)\b|सुन|बजा|चला|लगा|चाहिए|ಹಾಕಿ|ಕೇಳ|ಬೇಕು", re.I)
+STOP_WORD = re.compile(r"\b(stop|pause|turn off|band karo|band kar do|bandh karo)\b|बंद|रोक|ನಿಲ್ಲಿಸಿ|ನಿಲ್ಲಿಸು", re.I)
+SING_WORD = re.compile(r"\b(sing|gaao|gao|gaa do)\b|गाओ|गा दो|ಹಾಡಿ", re.I)
+_FILLER = re.compile(r"\b(please|can you|could you|will you|for me|me|i want to|i wanna|i would like to|want to|"
+                     r"listen to|hear|play|put on|start|some|a|an|the|my|songs?|music|tracks?|playlist|gaan[ae]|gana|"
+                     r"bajao|bajaao|baja do|laga do|lagao|chalao|chala do|sunao|suna do|mujhe|kuch|koi|ek|ka|ki|ke|ko|"
+                     r"do|de|karo|zara|plz|pls)\b|गाना|गाने|संगीत|सुनाओ|बजाओ|लगाओ|चलाओ|मुझे|कुछ|कोई|एक|के|का|की|को|दो|करो", re.I)
+_GENERIC = {"calm", "relaxing", "relax", "soothing", "soft", "gentle", "happy", "sleepy", "sleep", "devotional",
+            "bhajan", "bhajans", "lullaby", "good", "nice", "new", "old", "any", "something", "instrumental",
+            "background", "peaceful", "morning", "evening", "night", "party", "dance", "prayer", "and", "to", "of", "on"}
+_MOODS = (("sleepy", ("lullaby", "lori", "sleep", "sleepy", "लोरी")), ("devotional", ("bhajan", "devotional", "prayer", "भजन")),
+          ("happy", ("happy", "party", "dance", "cheerful")), ("calm", ("calm", "relax", "relaxing", "soothing", "peaceful", "soft", "gentle")))
+MAP_STRONG = [
+    re.compile(r"\b(?:take me to|navigate to|directions? to|route to|i (?:want|need) to (?:go|get) to|i(?:'m| am) going to)\s+(?P<d>.+)", re.I),
+    re.compile(r"\b(?:mujhe|muje)\s+(?P<d>.+?)\s+(?:jaana|jana|pahunchna|pahuchna)\s+(?:hai|h)\b", re.I),
+    re.compile(r"(?:मुझे\s+)?(?P<d>.+?)\s+(?:जाना|पहुंचना|पहुँचना)\s+है"),
+]
+MAP_WEAK = [
+    re.compile(r"\b(?:how (?:do|can) i (?:get|go|reach)(?: to)?|how to (?:get|go|reach)(?: to)?|way to)\s+(?P<d>.+)", re.I),
+    re.compile(r"(?P<d>.+?)\s+(?:kaise|kese)\s+(?:jaun|jaoon|jayen|jaye|pahunchu|pahunchun|jaana|jana)\b", re.I),
+    re.compile(r"(?P<d>.+?)\s+कैसे\s+(?:जाऊं|जाऊँ|जाएं|जाएँ|पहुंचूं|पहुँचूँ|जाना)"),
+]
+_DEST_TAIL = re.compile(r"\s*\b(please|from here|now|today|right now|kaise|na|plz|pls)\b.*$|[?!.,।]+$", re.I)
+_ROMAN_HINDI = re.compile(r"\b(mujhe|muje|kaise|kahan|jaana|jana|bajao|sunao|gaana|laga|chahiye|karo|kya|nahi|accha|achha)\b", re.I)
+
+
+def _destination(text, patterns):
+    for p in patterns:
+        m = p.search(text)
+        if m:
+            d = _DEST_TAIL.sub("", m.group("d")).strip(" '\"")
+            d = re.sub(r"^(the|a)\s+", "", d, flags=re.I)
+            if d and len(d.split()) <= 6 and not MUSIC_WORDS.search(d):
+                return d
+    return None
+
+
+def _music_intent(text):
+    t = text or ""
+    low = t.lower()
+    if STOP_WORD.search(t) and (MUSIC_WORDS.search(t) or SING_WORD.search(t)):
+        return {"source": "stop", "query": "", "mood": ""}
+    if SING_WORD.search(t):
+        return {"source": "generated", "query": "", "mood": "calm"}
+    by_song = ACTION_CUE.search(t) and re.search(r"\bplay\b.+\bby\b", low)
+    if not ((MUSIC_WORDS.search(t) and ACTION_CUE.search(t)) or by_song):
+        return None
+    q = re.sub(r"[?!.,।]", " ", low)
+    q = re.sub(r"\s+", " ", _FILLER.sub(" ", q)).strip()
+    mood = next((m for m, words in _MOODS if any(w in low for w in words)), "")
+    named = [w for w in q.split() if w not in _GENERIC]
+    if not named:
+        return {"source": "library", "query": mood or "calm", "mood": mood or "calm"}
+    if " by " not in f" {q} " and "songs" not in q:
+        q += " songs"
+    return {"source": "youtube", "query": q, "mood": mood}
+
+
+def quick_intents(text):
+    """Cheap, deterministic detection used when the LLM fails or ignores its tools."""
+    out = {}
+    music = _music_intent(text)
+    if music:
+        out["music"] = music
+    strong = _destination(text, MAP_STRONG)
+    weak = None if strong else _destination(text, MAP_WEAK)
+    if strong or weak:
+        out["map"], out["map_strong"] = strong or weak, bool(strong)
+    return out
+
+
+def reply_lang(text):
+    lang = detect_language(text)
+    return lang if lang != "en" else ("hl" if _ROMAN_HINDI.search(text or "") else "en")
+
+
+TEMPLATES = {
+    "music": {"en": "Sure! I've put some music on the screen. Tap play if it does not start by itself.",
+              "hi": "ज़रूर! मैंने संगीत लगा दिया है। अगर अपने आप न बजे तो प्ले बटन दबाइए।",
+              "hl": "Zaroor! Maine gaana laga diya hai. Agar apne aap na baje to play button dabaiye.",
+              "kn": "ಖಂಡಿತ! ನಾನು ಸಂಗೀತವನ್ನು ಹಾಕಿದ್ದೇನೆ. ತಾನಾಗಿ ಪ್ರಾರಂಭವಾಗದಿದ್ದರೆ ಪ್ಲೇ ಬಟನ್ ಒತ್ತಿ."},
+    "stop": {"en": "Okay, I've stopped the music.", "hi": "ठीक है, मैंने संगीत बंद कर दिया।",
+             "hl": "Theek hai, maine gaana band kar diya.", "kn": "ಸರಿ, ಸಂಗೀತ ನಿಲ್ಲಿಸಿದ್ದೇನೆ."},
+    "sing": {"en": "I can't sing like a real singer, but I've put on some soft music for you.",
+             "hi": "मैं किसी असली गायक की तरह नहीं गा सकती, लेकिन आपके लिए हल्का संगीत लगा दिया है।",
+             "hl": "Main asli gayak ki tarah nahi gaa sakti, lekin aapke liye halka sangeet laga diya hai.",
+             "kn": "ನಾನು ನಿಜವಾದ ಗಾಯಕರಂತೆ ಹಾಡಲು ಸಾಧ್ಯವಿಲ್ಲ, ಆದರೆ ನಿಮಗಾಗಿ ಮೃದು ಸಂಗೀತ ಹಾಕಿದ್ದೇನೆ."},
+    "map": {"en": "Here is the way to {d}. Please look below, and tap Bus or Metro for buses.",
+            "hi": "{d} जाने का रास्ता नीचे दिखाया है। बस या मेट्रो के लिए नीचे बटन दबाइए।",
+            "hl": "{d} jaane ka raasta neeche dikhaya hai. Bus ya metro ke liye neeche button dabaiye.",
+            "kn": "{d} ಗೆ ಹೋಗುವ ದಾರಿಯನ್ನು ಕೆಳಗೆ ತೋರಿಸಿದ್ದೇನೆ. ಬಸ್ ಅಥವಾ ಮೆಟ್ರೋಗಾಗಿ ಕೆಳಗಿನ ಬಟನ್ ಒತ್ತಿ."},
+}
+
+
 async def respond(history, user_text, location=None, client=None, nav=None):
     """history: list of {"role","content"} plain turns (mutated).
     location: {"lat":..,"lon":..} or None. Returns {"text","lang","error"}."""
     own = client is None
     client = client or httpx.AsyncClient(timeout=10)
     user_lang, error, text, sink = detect_language(user_text), None, "", {}
+    intent, used, llm_failed = quick_intents(user_text), set(), False
     msgs = [{"role": "system", "content": SYSTEM}] + history[-12:] + [{"role": "user", "content": user_text}]
     if nav:
         msgs.insert(1, {"role": "system", "content": "LIVE NAVIGATION STATE (verified from GPS; use only "
@@ -450,15 +634,37 @@ async def respond(history, user_text, location=None, client=None, nav=None):
             for c in calls:
                 try: args = json.loads(c["function"]["arguments"] or "{}")
                 except ValueError: args = {}
+                used.add(c["function"]["name"])
                 result = await run_tool(c["function"]["name"], args, location, client, sink)
                 msgs.append({"role": "tool", "tool_call_id": c["id"], "content": json.dumps(result)})
-        if not text:
+        if not text and not intent:
             error, text = "unavailable", FALLBACK["unavailable"][user_lang]
     except llm.LLMError as e:
-        error, text = e.kind, FALLBACK[e.kind][user_lang]
+        llm_failed = True
+        if not intent:
+            error, text = e.kind, FALLBACK[e.kind][user_lang]
     finally:
         if own: await client.aclose()
+    rl = reply_lang(user_text)
+    music = intent.get("music")
+    if music and not (sink.get("music") or sink.get("song")):
+        sink["music"] = music
+        kind = "stop" if music["source"] == "stop" else "sing" if music["source"] == "generated" else "music"
+        text = TEMPLATES[kind][rl]
+    dest = intent.get("map")
+    if dest and not sink.get("map") and (intent["map_strong"] or llm_failed) and not music:
+        await run_tool("show_map", {"destination": dest}, location, None, sink)
+        if not text or not (used & {"search_place", "get_route"}):
+            text = TEMPLATES["map"][rl].format(d=dest)
     panel = sink.get("panel")
+    segments = split_voices(text)
+    text = strip_voice_tags(text)
+    theme = sink.get("theme")
+    if not theme:
+        if panel and panel["kind"] == "recipe": theme = "cooking"
+        elif panel and panel["kind"] == "health": theme = "health"
+        elif sink.get("music") or sink.get("song"): theme = "music"
+        elif sink.get("map"): theme = "travel"
     if not error:
         note = ""
         if panel:
@@ -466,4 +672,5 @@ async def respond(history, user_text, location=None, client=None, nav=None):
                    " | ".join(f"{i + 1}) {x}" for i, x in enumerate(panel["steps"])) + "]"
         history += [{"role": "user", "content": user_text}, {"role": "assistant", "content": text + note}]
     return {"text": text, "lang": detect_language(text), "error": error, "map": sink.get("map"), "panel": panel,
-            "music": sink.get("music"), "actions": sink.get("actions", [])}
+            "music": sink.get("music"), "actions": sink.get("actions", []),
+            "theme": theme, "song": sink.get("song"), "segments": segments}

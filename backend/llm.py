@@ -50,7 +50,7 @@ async def chat(messages, tools=None, timeout=8.0, client=None):
             r = None
             for use_tools in ([True, False] if tools else [False]):
                 body = {"model": p["model"], "messages": messages,
-                        "temperature": 0.4, "max_tokens": 350}
+                        "temperature": 0.4, "max_tokens": int(os.getenv("LLM_MAX_TOKENS", "900"))}
                 if use_tools:
                     body["tools"] = tools
                 try:

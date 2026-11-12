@@ -8,6 +8,7 @@ export function useVoiceSession(options){
  const [active,setActive]=useState(false),[phase,setPhase]=useState('idle'),[line,setLine]=useState(''),[raw,setRaw]=useState(''),[error,setError]=useState(''),[userSpeaking,setUserSpeaking]=useState(false),[speaking,setSpeaking]=useState(false),[capturing,setCapturing]=useState(false),[muted,setMuted]=useState(()=>readSession('gnani_muted','0')==='1'),[stillMuted,setStillMuted]=useState(false),[repliesAloud,setAloudState]=useState(()=>readSession('gnani_replies_aloud','1')!=='0'),[reply,setReply]=useState(null);
  const opts=useRef(options);opts.current=options;
  const mutedRef=useRef(muted),aloudRef=useRef(repliesAloud),running=useRef(false),awaiting=useRef(false),userSpeech=useRef(false),socket=useRef(null),connecting=useRef(null),stream=useRef(null),ctx=useRef(null),processor=useRef(null),source=useRef(null),eraseCapture=useRef(()=>{}),queue=useRef([]),player=useRef(null),playing=useRef(false),latest=useRef([]),generation=useRef(0),audioCache=useRef(new Map()),guidanceEpoch=useRef(0),playingTemplate=useRef(false),currentId=useRef(null),sequence=useRef(0),requestInfo=useRef(new Map()),reference=useRef(null),referenceTime=useRef(0),lastOutputAt=useRef(0),fading=useRef(false),voiceTurn=useRef(false),playSerial=useRef(0),speechAbort=useRef(null);
+ const diagnostics=useRef({level:0,vad:'idle',audioContext:'none',websocket:0,lowSince:0,lastTranscript:0,lastLog:0});
  function phaseTo(value){setPhase(value)}
  function idle(){if(!playing.current&&!awaiting.current)phaseTo(mutedRef.current?'muted':stream.current?'listening':'idle')}
  function context(){if(!ctx.current||ctx.current.state==='closed')ctx.current=new AudioContext();return ctx.current}
@@ -49,20 +50,22 @@ export function useVoiceSession(options){
    ws.onclose=()=>{connecting.current=null;if(running.current){setError('Connection lost. Please try again.');phaseTo(mutedRef.current?'muted':'idle')}};
    ws.onmessage=e=>{
     const m=JSON.parse(e.data);if(m.request_id&&m.request_id!==currentId.current)return;
-    if(m.type==='transcript')setRaw(m.text);
-    if(m.type==='reply'){setReply({text:m.text,language:m.language,typed:!m.aloud});if(!m.aloud)setLine(m.text)}
+    if(m.type==='transcript'){setRaw(m.text);console.info('[gNani STT]',{characters:m.text.length,language:m.language});diagnostics.current.lastTranscript=performance.now();diagnostics.current.lowSince=0;setError('')}
+    if(m.type==='stt_empty'){setError(m.text);console.info('[gNani debug] STT empty')}
+    if(m.type==='theme'){document.documentElement.dataset.theme=['default','cooking','music','travel','health','devotional','story','learning'].includes(m.theme)?m.theme:'default';opts.current.onTheme?.(m.theme)}
+    if(m.type==='reply'){setReply({text:m.text,language:m.language,typed:!m.aloud,segments:m.segments});if(!m.aloud)setLine(m.text)}
     if(m.type==='audio_sentence'){const item={text:m.text,chunks:m.chunks,priority:80,requestId:m.request_id,pauseMs:m.pause_ms??200};latest.current.push(item);queue.current.push(item);drain()}
     if(m.type==='text_only')setLine(m.text);
     if(m.type==='tool_error'||m.type==='error')setError(m.text);
     if(m.type==='audio_unavailable')setError('gNani’s voice is unavailable. Please try Listen again.');
-    if(m.type==='response_end'||m.type==='turn_cancelled'||m.type==='error'){awaiting.current=false;drain()}
+    if(m.type==='response_end'||m.type==='turn_cancelled'||m.type==='error'||m.type==='stt_empty'){awaiting.current=false;drain()}
     if(m.type==='timing')console.info('[gNani timing]',m.events);
     opts.current.onEvent?.(m);
    };
   }).finally(()=>connecting.current=null);
   return connecting.current;
  }
- function releaseMic(){eraseCapture.current();processor.current?.disconnect();source.current?.disconnect();processor.current=null;source.current=null;stream.current?.getTracks().forEach(track=>track.stop());stream.current=null;setCapturing(false);userSpeech.current=false;setUserSpeaking(false)}
+ function releaseMic(){if(diagnostics.current.lowNotice)setError('');diagnostics.current.lowSince=0;diagnostics.current.lowNotice=false;eraseCapture.current();processor.current?.disconnect();source.current?.disconnect();processor.current=null;source.current=null;stream.current?.getTracks().forEach(track=>track.stop());stream.current=null;setCapturing(false);userSpeech.current=false;setUserSpeaking(false)}
  async function capture(){
   if(stream.current||mutedRef.current)return;
   const media=await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:true,noiseSuppression:true,autoGainControl:true}});
@@ -71,8 +74,14 @@ export function useVoiceSession(options){
   let frames=[],pre=[],count=0,speech=false,silence=0,barge=0;
   function clear(){frames=[];pre=[];count=0;speech=false;silence=0;barge=0}eraseCapture.current=clear;
   node.onaudioprocess=e=>{
-   if(mutedRef.current||!stream.current||socket.current?.readyState!==1){clear();return}
+   if(mutedRef.current||!stream.current||socket.current?.readyState!==1){diagnostics.current.lowSince=0;clear();return}
    const frame=new Float32Array(e.inputBuffer.getChannelData(0)),rms=Math.sqrt(frame.reduce((a,b)=>a+b*b,0)/frame.length),duration=frame.length/c.sampleRate;
+   const now=performance.now(),d=diagnostics.current;
+   Object.assign(d,{level:rms,vad:speech?'speech':silence?'silence':'idle',audioContext:c.state,websocket:socket.current?.readyState,secondsLow:d.lowSince?(now-d.lowSince)/1000:0});
+   if(rms>.018||playing.current||awaiting.current){d.lowSince=0;if(d.lowNotice){d.lowNotice=false;setError('')}}
+   else if(!d.lowSince)d.lowSince=now;
+   if(d.lowSince&&now-d.lowSince>=8000&&now-d.lastTranscript>=8000){d.lowNotice=true;setError('I cannot hear you. Please speak a little closer.')};
+   if(now-d.lastLog>1000){d.lastLog=now;console.info('[gNani mic]',{level:Number(rms.toFixed(4)),vad:d.vad,low_ms:Math.round(d.secondsLow*1000),websocket:d.websocket,audioContext:d.audioContext})}
    const output=player.current,outputTime=output?.currentTime??referenceTime.current;
    if((playing.current||performance.now()-lastOutputAt.current<400)&&isEcho(frame,reference.current,outputTime,c.sampleRate)){if(!speech){pre=[];barge=0}return}
    if(awaiting.current&&!playing.current){clear();return}
@@ -124,11 +133,11 @@ export function useVoiceSession(options){
  }
  function end(){speechAbort.current?.abort();playSerial.current++;releaseMic();running.current=false;generation.current++;queue.current=[];player.current?.pause();player.current=null;playing.current=false;setSpeaking(false);awaiting.current=false;socket.current?.close();socket.current=null;ctx.current?.close();setActive(false);setLine('');setRaw('');setError('');phaseTo(mutedRef.current?'muted':'idle')}
  function repeat(){if(!latest.current.length)return;queue.current=[...latest.current];drain()}
- async function listenReply(){if(!reply)return;await say(reply.text,reply.language,80,'reply')}
+ async function listenReply(){if(!reply)return;if(reply.segments?.length){for(const part of reply.segments)await say(part.text,reply.language,80,'reply',{voice:part.voice})}else await say(reply.text,reply.language,80,'reply')}
  function acceptExternalReply(text,lang,aloud=false){setReply({text,language:lang,typed:!aloud});if(!aloud)setLine(text);else say(text,lang,80,'reply')}
  function setRepliesAloud(value){aloudRef.current=value;setAloudState(value);try{sessionStorage.setItem('gnani_replies_aloud',value?'1':'0')}catch{}if(!value)stopTalking()}
  function tap(){if(mutedRef.current)return unmute();if(!stream.current)return start();if(playing.current||awaiting.current)interrupt();else idle()}
  useEffect(()=>{if(!muted){setStillMuted(false);return}const since=Number(readSession('gnani_muted_at',String(Date.now())));const timer=setTimeout(()=>setStillMuted(true),Math.max(0,600000-(Date.now()-since)));return ()=>clearTimeout(timer)},[muted]);
  useEffect(()=>()=>end(),[]);
- return {active,phase,line,raw,error,setError,userSpeaking,speaking,capturing,muted,stillMuted,speechBusy:()=>playing.current||queue.current.length>0,userSpeechActive:()=>userSpeech.current||awaiting.current,privacy:privacy[locale(options.lang||'en')],repliesAloud,setRepliesAloud,reply,listenReply,acceptExternalReply,sendText,mute,unmute,tap,start,end,interrupt,stopTalking,repeat,say,prefetch,sendLocation:p=>send('location',{location:p}),send,cancelGuidance};
+ return {diagnostics,active,phase,line,raw,error,setError,userSpeaking,speaking,capturing,muted,stillMuted,speechBusy:()=>playing.current||queue.current.length>0,userSpeechActive:()=>userSpeech.current||awaiting.current,privacy:privacy[locale(options.lang||'en')],repliesAloud,setRepliesAloud,reply,listenReply,acceptExternalReply,sendText,mute,unmute,tap,start,end,interrupt,stopTalking,repeat,say,prefetch,sendLocation:p=>send('location',{location:p}),send,cancelGuidance};
 }

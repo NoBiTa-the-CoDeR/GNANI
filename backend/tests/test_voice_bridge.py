@@ -30,7 +30,7 @@ class VoiceBridge(unittest.TestCase):
      event=ws.receive_json();events.append(event)
      if event['type']=='response_end':break
   self.assertTrue(any(e.get('type')=='step' and e.get('index')==1 for e in events));self.assertEqual(speak.call_args.args,('दूसरा कदम।','hi-IN'))
- def test_spoken_overview_is_at_most_three_sentences_and_matches_screen(self):
+ def test_long_reply_is_not_cut_off_and_matches_screen(self):
   speak=AsyncMock(return_value=['audio'])
   async def respond(*a,**kw):return {'text':'One. Two. Three. Four.','lang':'en','error':None}
   with patch.object(main.brain,'respond',respond),patch.object(main,'synthesize',speak):
@@ -39,7 +39,7 @@ class VoiceBridge(unittest.TestCase):
     while True:
      event=ws.receive_json();events.append(event)
      if event['type']=='response_end':break
-  self.assertEqual([c.args[0] for c in speak.call_args_list],['One.','Two.','Three.'])
+  self.assertEqual([c.args[0] for c in speak.call_args_list],['One.','Two.','Three.','Four.'])
   self.assertEqual([e['text'] for e in events if e['type']=='audio_sentence'],[c.args[0] for c in speak.call_args_list])
  def test_invalid_navigation_facts_are_not_forwarded(self):
   seen=[]
@@ -71,3 +71,31 @@ class VoiceBridge(unittest.TestCase):
      if event['type']=='response_end':break
   self.assertTrue(any(e.get('type')=='step' and e.get('index')==1 for e in events))
 if __name__=='__main__':unittest.main()
+
+class Segments(unittest.TestCase):
+ def test_gender_segments_and_full_story_are_forwarded(self):
+  parts=[{'voice':'f','text':'Grandmother began the story. ' * 12},{'voice':'m','text':'Grandfather answered kindly. ' * 12}]
+  spoken=AsyncMock(return_value=['audio'])
+  with patch.object(main.brain,'respond',AsyncMock(return_value={'text':' '.join(p['text'] for p in parts),'segments':parts,'lang':'en','theme':'story'})),patch.object(main,'synthesize',spoken):
+   with TestClient(main.app).websocket_connect('/api/session') as ws:
+    ws.send_json({'type':'text','aloud':True,'text':'Tell me a long story'});events=[]
+    while True:
+     value=ws.receive_json();events.append(value)
+     if value['type']=='response_end':break
+  audio=[e for e in events if e['type']=='audio_sentence']
+  self.assertEqual(len(audio),24);self.assertEqual(audio[-1]['voice'],'m')
+  self.assertTrue(any(c.kwargs.get('voice')=='Pranav' for c in spoken.call_args_list))
+  self.assertTrue(any(e['type']=='theme' and e['theme']=='story' for e in events))
+
+class CompletionBudget(unittest.TestCase):
+ def test_truncated_story_is_continued_before_voice_parsing(self):
+  import asyncio,json,httpx
+  seen=[]
+  def handle(req):
+   seen.append(json.loads(req.content))
+   return httpx.Response(200,json={'choices':[{'finish_reason':'length' if len(seen)==1 else 'stop','message':{'role':'assistant','content':'Once upon a time,' if len(seen)==1 else 'they found their way home. The end.'}}]})
+  async def run():
+   async with main.ConversationClient(transport=httpx.MockTransport(handle)) as c:
+    r=await c.post('https://api.groq.com/openai/v1/chat/completions',json={'model':'test','messages':[{'role':'user','content':'Tell a long story'}],'max_tokens':900})
+    self.assertTrue(r.json()['choices'][0]['message']['content'].endswith('The end.'))
+  asyncio.run(run());self.assertEqual(len(seen),2);self.assertEqual(seen[1]['max_tokens'],900);self.assertNotIn('tools',seen[1])

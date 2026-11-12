@@ -1,0 +1,2 @@
+import test from 'node:test';import assert from 'node:assert/strict';import {stepMinutes} from '../src/duration.js';
+test('recipe timer uses actual written duration and native digits',()=>{assert.equal(stepMinutes('Cook for 5 min.'),5);assert.equal(stepMinutes('५ मिनट पकाएँ'),5);assert.equal(stepMinutes('೩ ನಿಮಿಷ'),3);assert.equal(stepMinutes('rest for 2 hours'),120);assert.equal(stepMinutes('stir 30 seconds'),.5);assert.equal(stepMinutes('stir well'),null)})

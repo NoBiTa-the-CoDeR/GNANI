@@ -13,6 +13,12 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 load_dotenv(Path(__file__).resolve().parent.parent / '.env')
+# Paid song generation is disabled for this application, regardless of host defaults.
+os.environ['SONGS_ENABLED']='0'
+# This build uses free OSM routing and Pixabay/Commons only. Keep stored host
+# credentials intact, but do not enable optional paid mapping providers.
+for _disabled in ('GOOGLE_MAPS_API_KEY','GOOGLE_MAPS_EMBED_KEY','PEXELS_API_KEY'):
+    os.environ.pop(_disabled,None)
 # The supplied brain uses `import llm`; register the unchanged backend module.
 sys.modules['llm'] = importlib.import_module('backend.llm')
 brain = importlib.import_module('backend.brain')
@@ -32,10 +38,12 @@ provider_failure = contextvars.ContextVar('provider_failure', default=None)
 class ConversationClient(httpx.AsyncClient):
     async def post(self, url, **kwargs):
         body=kwargs.get('json')
+        if str(url).startswith(os.getenv('OPENROUTER_BASE_URL','https://openrouter.ai/api/v1').rstrip('/')+'/') and isinstance(body,dict) and body.get('model')!='openrouter/free' and not str(body.get('model','')).endswith(':free'):
+            raise httpx.RequestError('Only free OpenRouter models are enabled')
         groq_base=os.getenv('GROQ_BASE_URL','https://api.groq.com/openai/v1').rstrip('/')
         provider='groq' if str(url)==groq_base+'/chat/completions' else 'openrouter'
         if isinstance(body,dict) and body.get('tools'):
-            kwargs['json']={**body,'max_tokens':1400}
+            kwargs['json']={**body,'max_tokens':int(os.getenv('LLM_MAX_TOKENS','900'))}
             messages=body.get('messages',[])
             last_user=next((i for i in range(len(messages)-1,-1,-1) if messages[i].get('role')=='user'),None)
             if last_user is not None and not any(m.get('role')=='tool' for m in messages[last_user+1:]):
@@ -45,6 +53,9 @@ class ConversationClient(httpx.AsyncClient):
 
         if provider=='groq' and isinstance(body,dict) and body.get('model')=='qwen/qwen3.8-27b':
             kwargs['json']={**kwargs.get('json',body),'reasoning_effort':'none'}
+        latest_user=next((str(m.get('content','')) for m in reversed(body.get('messages',[])) if m.get('role')=='user'),'') if isinstance(body,dict) else ''
+        if re.search(r'(?i)story|कहानी|ಕಥೆ',latest_user):
+            kwargs['json']={k:v for k,v in kwargs.get('json',body).items() if k not in ('tools','tool_choice','parallel_tool_calls')}
         try:
             response=await super().post(url,**kwargs)
             # Groq occasionally generates a malformed tool name. Retry the
@@ -67,6 +78,26 @@ class ConversationClient(httpx.AsyncClient):
             trace.failure(provider,exc)
             provider_failure.set('groq: HTTP 400 tool_use_failed' if str(exc)=='Groq HTTP 400 tool_use_failed' else f'{provider}: {type(exc).__name__}')
             raise
+        # The user-supplied module limits each call to 900 tokens. Continue a
+        # truncated story here, before its text is parsed into voice segments.
+        story=isinstance(body,dict) and any(m.get('role')=='user' and re.search(r'(?i)story|कहानी|ಕಥೆ',str(m.get('content',''))) for m in body.get('messages',[]))
+        if story and response.status_code==200:
+            data=response.json();choice=data.get('choices',[{}])[0];message=choice.get('message',{})
+            if choice.get('finish_reason')=='length' and isinstance(message.get('content'),str) and not message.get('tool_calls'):
+                combined=message['content'];complete=False
+                for _ in range(2):
+                    trace.event(provider,'continue','story_token_limit')
+                    payload={k:v for k,v in kwargs.get('json',body).items() if k not in ('tools','tool_choice','parallel_tool_calls')}
+                    payload['messages']=[*body['messages'],{'role':'assistant','content':combined},{'role':'user','content':'Continue exactly from the unfinished sentence and finish this same story now in under 120 words. Keep the same language and [[F]]/[[M]] voice tags. Do not restart or summarize.'}]
+                    following=await super().post(url,**{**kwargs,'json':payload})
+                    following.raise_for_status();following_data=following.json();next_choice=following_data['choices'][0];next_message=next_choice['message']
+                    addition=next_message.get('content')
+                    if not isinstance(addition,str) or not addition.strip():raise httpx.RequestError('story_continuation_empty')
+                    combined+=' '+addition
+                    if next_choice.get('finish_reason')!='length':complete=True;break
+                if not complete:raise httpx.RequestError('story_continuation_limit')
+                data['choices'][0]['message']['content']=combined;data['choices'][0]['finish_reason']='stop'
+                response=httpx.Response(200,json=data,request=response.request)
         trace.event(provider,'ok' if response.status_code<400 else 'error',f'http_{response.status_code}')
         if response.status_code>=400:
             provider_failure.set(f'{provider}: HTTP {response.status_code} {response.reason_phrase}')
@@ -124,6 +155,8 @@ async def traced_tool(*args, **kwargs):
 brain.run_tool = traced_tool
 
 app=FastAPI()
+from backend.selftest import install as install_selftest
+install_selftest(app,brain)
 app.add_middleware(CORSMiddleware,allow_origins=['http://localhost:5173','http://127.0.0.1:5173'],allow_methods=['*'],allow_headers=['*'])
 GNANI=os.getenv('GNANI_API_BASE_URL','https://api.vachana.ai').rstrip('/')
 KEY=os.getenv('GNANI_API_KEY','')
@@ -264,6 +297,8 @@ async def session(ws:WebSocket):
             history.append(hint)
         user_locale=language.detect(transcript,None)
         language_hint={'role':'system','content':'Latest user language: '+{'en-IN':'English. Answer in English only.','hi-IN':'Hindi. Use Devanagari script.','hi-en':'Hindi mixed with English. Use Devanagari for Hindi words.','kn-IN':'Kannada. Use Kannada script.'}[user_locale]+' Music starts only after the user taps Play. For generated songs, use words in this same language and say they are spoken with music, not sung.'}
+        if re.search(r'(?i)story|कहानी|ಕಥೆ',transcript) and re.search(r'(?i)male|female|grandfather|grandmother|man|woman|दादा|दादी|ಅಜ್ಜ',transcript):
+            language_hint['content']+=' For this story use both [[F]]female narration or dialogue[[/F]] and [[M]]male quoted dialogue[[/M]]. These exact tags select Timbre voices; do not replace them with speaker names.'
         history.append(language_hint)
         try:
             step_command=bool(panel and panel.get('steps') and re.search(r'(?i)next step|step by step|repeat step|अगला|अगले|अगली|एक एक|ಮುಂದಿನ|ಹಂತ|agla|agle',transcript))
@@ -294,11 +329,17 @@ async def session(ws:WebSocket):
             result['text']=overviews.get(lang,overviews['en'])
         if err and provider_failure.get():
             await emit({'type':'tool_error','text':provider_failure.get()})
+        if result.get('map') and not result.get('text'):
+            result['text']={'en':'Your journey is shown below. Where are you now?','hi':'आपकी यात्रा नीचे दिखाई गई है। आप अभी कहाँ हैं?','kn':'ನಿಮ್ಮ ಪ್ರಯಾಣ ಕೆಳಗೆ ತೋರಿಸಲಾಗಿದೆ. ನೀವು ಈಗ ಎಲ್ಲಿದ್ದೀರಿ?'}.get(result.get('lang'),'Your journey is shown below. Where are you now?')
+            result['segments']=[]
+        if not result.get('theme'):
+            result['theme']='story' if re.search(r'(?i)story|कहानी|ಕಥೆ',transcript) else 'default'
         if result.get('map'):
             await emit({'type':'map','map':result['map'],'language':result.get('lang','en')})
         if result.get('panel'):
             panel=result['panel'];panel_step=0;panel_lang=result.get('lang','en')
             await emit({'type':'panel','panel':panel,'language':panel_lang})
+        await emit({'type':'theme','theme':result.get('theme','default')})
         if result.get('music'):
             await emit({'type':'music','music':result['music'],'language':result.get('lang','en')})
         if result.get('actions'):
@@ -307,9 +348,6 @@ async def session(ws:WebSocket):
             await emit({'type':'tool_error','text':tool_error_for_turn.get()})
         trace.event('brain','error' if err else 'ok',err if err in ('rate_limit','auth','timeout','no_providers','unavailable') else '')
         text=result['text']
-        if isinstance(text,str):
-            text=' '.join(re.split(r'(?<=[.!?।])\s+',text.strip())[:3])
-            result['text']=text
         index=mentioned_step(text)
         if panel and index is not None and 0<=index<len(panel.get('steps',[])):
             panel_step=index;await emit({'type':'step','index':index})
@@ -323,16 +361,30 @@ async def session(ws:WebSocket):
             trace.event('tts','skipped','unsupported_brain_language')
             await emit({'type':'text_only','text':text})
             await emit({'type':'audio_unavailable'});await emit({'type':'response_end'});return
-        await emit({'type':'reply','text':text,'language':locale,'aloud':reply_aloud})
+        await emit({'type':'reply','text':text,'language':locale,'aloud':reply_aloud,'segments':[{'text':part.get('text',''),'voice':voices.male(locale) if part.get('voice')=='m' else None} for part in (result.get('segments') or [{'text':text,'voice':'f'}])]})
         if not reply_aloud:
             await emit({'type':'text_only','text':text,'language':locale})
             await emit({'type':'response_end'});return
         stage='tts'
         try:
-            for index,sentence in enumerate(sentences(text,locale)):
-                audio=await synthesize(sentence,locale)
-                if index==0:timing.mark('first_sentence_ready')
-                await emit({'type':'audio_sentence','text':sentence,'chunks':audio,'language':locale,'pause_ms':200})
+            segments=result.get('segments') or [{'voice':'f','text':text}]
+            jobs=[(sentence,part.get('voice','f')) for part in segments for sentence in sentences(part.get('text',''),locale)]
+            pending=None
+            async def render(item):
+                sentence,gender=item
+                voice=voices.male(locale) if gender=='m' else None
+                return await synthesize(sentence,locale,voice=voice) if voice else await synthesize(sentence,locale)
+            try:
+                for index,item in enumerate(jobs):
+                    sentence,gender=item
+                    if pending is None:pending=asyncio.create_task(render(item))
+                    audio=await pending;pending=None
+                    if index+1<len(jobs):pending=asyncio.create_task(render(jobs[index+1]))
+                    if index==0:timing.mark('first_sentence_ready')
+                    await emit({'type':'audio_sentence','text':sentence,'chunks':audio,'language':locale,'voice':gender,'pause_ms':180})
+            finally:
+                if pending:
+                    pending.cancel();await asyncio.gather(pending,return_exceptions=True)
         except Exception as exc:
             trace.failure('tts',exc)
             await emit({'type':'text_only','text':text})
@@ -358,7 +410,7 @@ async def session(ws:WebSocket):
                 audio=None
                 if not mic_enabled:return
                 if not transcript.strip():
-                    await emit({'type':'error','text':'I did not hear anything. Please try again.'});return
+                    await emit({'type':'stt_empty','text':'Speech recognition returned no words. Please try again.'});return
                 await emit({'type':'transcript','text':transcript,'language':language.detect(transcript,stt_lang)})
             else:
                 clock.mark('text_received');transcript=(text or '').strip()[:2000]

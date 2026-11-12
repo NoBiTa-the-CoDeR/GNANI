@@ -34,7 +34,7 @@ class SpeechInput(BaseModel):
     script: Literal['native','latin']='native'
 
 class StreamSpeechInput(SpeechInput):
-    text: str = Field(min_length=1,max_length=3000)
+    text: str = Field(min_length=1)
 
 class TransitInput(BaseModel):
     origin: Optional[Point]=None

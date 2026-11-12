@@ -22,3 +22,12 @@ def save(lang,voice,speed,model):
  for key,value in [('GNANI_TTS_MODEL_'+suffix,model),('GNANI_TTS_VOICE_'+suffix,voice),('GNANI_TTS_SPEED_'+suffix,str(speed))]:
   set_key(str(path),key,value);os.environ[key]=value
  path.chmod(0o600)
+
+
+def male(lang):
+ suffix={'en-IN':'EN','hi-IN':'HI','kn-IN':'KN','hi-en':'MIXED'}.get(lang,'EN')
+ model,normal,_=settings(lang)
+ defaults={'en-IN':'Pranav','hi-IN':'Deepak','kn-IN':'Kavin'}
+ fallback='Avinash' if model=='timbre-v3.0' else defaults.get(lang)
+ choice=os.getenv('GNANI_TTS_VOICE_MALE_'+suffix,os.getenv('GNANI_TTS_VOICE_MALE',fallback or normal))
+ return choice if choice in choices(model,lang) else normal

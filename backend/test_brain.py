@@ -240,6 +240,91 @@ async def t_music_search_jamendo():
     os.environ.pop("JAMENDO_CLIENT_ID")
 
 
+async def t_voices_theme_and_song_rules():
+    assert brain.split_voices("Hello [[M]]Come here[[/M]] she said") == [
+        {"voice": "f", "text": "Hello"}, {"voice": "m", "text": "Come here"}, {"voice": "f", "text": "she said"}]
+    assert brain.strip_voice_tags("A [[M]]b[[/M]] c") == "A b c"
+    os.environ["GEMINI_API_KEY"] = "g"; os.environ["SONGS_ENABLED"] = "1"
+    def h(req):
+        msgs = json.loads(req.content)["messages"]
+        if len(msgs) == 2:
+            return httpx.Response(200, json=reply(tool_calls=[
+                {"id": "1", "type": "function", "function": {"name": "compose_song", "arguments": json.dumps(
+                    {"title": "Hi", "style": "pop ballad in the voice of a famous singer", "vocal": "male",
+                     "lyrics": "[Verse]\nline one"})}}]))
+        if len(msgs) == 4:  # model retries with a generic style after the refusal
+            assert "no_artist_imitation" in msgs[-1]["content"]
+            return httpx.Response(200, json=reply(tool_calls=[
+                {"id": "2", "type": "function", "function": {"name": "compose_song", "arguments": json.dumps(
+                    {"title": "Hi", "style": "warm acoustic pop ballad, slow tempo", "vocal": "male", "length_sec": 9999,
+                     "lyrics": "[Verse]\nline one\nline two"})}}]))
+        return httpx.Response(200, json=reply("Your song is being made. [[M]]Listen soon[[/M]]."))
+    out = await brain.respond([], "sing me a song", None, make_client(h))
+    sg = out["song"]
+    assert sg["vocal"] == "male" and sg["length_sec"] == 180 and sg["lyrics"][1] == "line one", sg
+    assert out["theme"] == "music" and [x["voice"] for x in out["segments"]] == ["f", "m", "f"], out
+    assert "[[" not in out["text"]
+    # a Gemini key alone (for chat) must NOT switch songs on; SONGS_ENABLED=1 is required
+    os.environ.pop("SONGS_ENABLED")
+    r = await brain.run_tool("compose_song", {"title": "x", "style": "pop", "vocal": "male", "lyrics": "a"}, None, None, {})
+    assert r == {"error": "song_service_not_configured"}, r
+    os.environ.pop("GEMINI_API_KEY")
+    r = await brain.run_tool("compose_song", {"title": "x", "style": "pop", "vocal": "male", "lyrics": "a"}, None, None, {})
+    assert r == {"error": "song_service_not_configured"}
+    # theme: explicit tool wins, else inferred from the panel kind
+    def h2(req):
+        if len(json.loads(req.content)["messages"]) == 2:
+            return httpx.Response(200, json=reply(tool_calls=[{"id": "1", "type": "function", "function": {
+                "name": "show_panel", "arguments": json.dumps({"kind": "recipe", "title": "Dosa"})}}]))
+        return httpx.Response(200, json=reply("Details below."))
+    out = await brain.respond([], "dosa", None, make_client(h2))
+    assert out["theme"] == "cooking", out
+
+
+async def t_quick_intents():
+    q = brain.quick_intents
+    assert q("play some calm music")["music"] == {"source": "library", "query": "calm", "mood": "calm"}
+    m = q("Play Sapphire by Ed Sheeran")["music"]
+    assert m["source"] == "youtube" and "sapphire by ed sheeran" in m["query"], m
+    m = q("I want to listen to Arijit Singh songs")["music"]
+    assert m["source"] == "youtube" and "arijit singh" in m["query"], m
+    assert q("gaana bajao")["music"]["source"] == "library"
+    assert q("stop the music")["music"]["source"] == "stop"
+    assert q("sing me a song")["music"]["source"] == "generated"
+    assert q("गाना बजाओ")["music"]["source"] == "library"
+    assert "music" not in q("what is the best song for a lullaby?")
+    assert q("Take me to Electronic City metro station")["map"] == "Electronic City metro station"
+    assert q("Take me to Electronic City metro station")["map_strong"] is True
+    assert q("Mujhe Majestic jaana hai")["map"] == "Majestic"
+    assert q("मुझे मजेस्टिक जाना है")["map"] == "मजेस्टिक"
+    w = q("how do I get to sleep")
+    assert w.get("map_strong") is False
+    assert q("How do I make dosa?") == {} and q("Hello") == {}
+    assert brain.reply_lang("gaana bajao") == "hl" and brain.reply_lang("hello") == "en" and brain.reply_lang("गाना") == "hi"
+
+
+async def t_music_and_map_survive_llm_failure():
+    down = lambda req: httpx.Response(429)
+    out = await brain.respond([], "play some calm music", None, make_client(down))
+    assert out["error"] is None and out["music"]["source"] == "library" and out["theme"] == "music", out
+    assert "music" in out["text"].lower()
+    out = await brain.respond([], "गाना बजाओ", None, make_client(down))
+    assert out["error"] is None and out["lang"] == "hi", out
+    out = await brain.respond([], "Take me to Majestic", {"lat": 1, "lon": 2}, make_client(down))
+    assert out["error"] is None and out["map"]["destination"] == "Majestic" and out["theme"] == "travel", out
+    assert "origin=1,2" in out["map"]["links"]["walk"]
+    out = await brain.respond([], "Hello", None, make_client(down))
+    assert out["error"] == "rate_limit"
+
+
+async def t_model_ignores_tools_music_still_plays():
+    h = lambda req: httpx.Response(200, json=reply("Sorry, I can't play music."))
+    out = await brain.respond([], "Play Sapphire by Ed Sheeran", None, make_client(h))
+    assert out["music"]["source"] == "youtube" and "can't" not in out["text"], out
+    out = await brain.respond([], "stop the music", None, make_client(h))
+    assert out["music"]["source"] == "stop"
+
+
 async def t_no_location_is_reported():
     r = await brain.get_route({"dest_lat": 1, "dest_lon": 2}, None, None)
     assert r == {"error": "location_unavailable"}
@@ -253,7 +338,7 @@ async def t_unconfigured_providers():
 
 async def main():
     for t in (t_language, t_fallback_to_second_provider, t_all_rate_limited_gives_honest_message_in_user_language,
-              t_navigation_uses_only_tool_data, t_model_without_tool_support_still_chats, t_geocoder_fallback_uses_keyed_service, t_map_card_for_destination, t_panel_and_context_note, t_live_nav_state_reaches_model, t_full_route_shape, t_image_search_sources, t_video_search_and_cap, t_panel_keeps_video_query, t_music_and_actions_tools, t_music_search_jamendo, t_no_location_is_reported, t_unconfigured_providers):
+              t_navigation_uses_only_tool_data, t_model_without_tool_support_still_chats, t_geocoder_fallback_uses_keyed_service, t_map_card_for_destination, t_panel_and_context_note, t_live_nav_state_reaches_model, t_full_route_shape, t_image_search_sources, t_video_search_and_cap, t_panel_keeps_video_query, t_music_and_actions_tools, t_music_search_jamendo, t_voices_theme_and_song_rules, t_quick_intents, t_music_and_map_survive_llm_failure, t_model_ignores_tools_music_still_plays, t_no_location_is_reported, t_unconfigured_providers):
         await t(); print("PASS", t.__name__)
 
 asyncio.run(main())

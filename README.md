@@ -1,3 +1,5 @@
+Latest audit: [12 November phase report](PHASE_REPORT.md). Open `/selftest` for real service checks (rate limited to one run per minute). Triple-tap the gNani brand to see microphone diagnostics. Songs stay disabled; the generated-music option is local Tone.js plus optional spoken Timbre lines, not real singing. Calm mode and `?lite=1` disable visual effects.
+
 # Live app
 
 https://gnani-ai-02v0.onrender.com

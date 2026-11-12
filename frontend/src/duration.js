@@ -1,0 +1,2 @@
+// Timers are created only by an explicit tap, never while parsing a recipe.
+export function stepMinutes(text){const digits=String(text).replace(/[०-९೦-೯]/g,c=>String('०१२३४५६७८९'.includes(c)?'०१२३४५६७८९'.indexOf(c):'೦೧೨೩೪೫೬೭೮೯'.indexOf(c)));const m=digits.match(/(\d+(?:\.\d+)?)\s*(seconds?|secs?|minutes?|mins?|hours?|hrs?|मिनट|घंटे?|सेकंड|ನಿಮಿಷ|ಗಂಟೆ|ಸೆಕೆಂಡ್)/i);if(!m)return null;const value=+m[1],unit=m[2];const minutes=/hour|hr|घंट|ಗಂಟೆ/i.test(unit)?value*60:/sec|सेकंड|ಸೆಕೆಂಡ್/i.test(unit)?value/60:value;return minutes>=1/60&&minutes<=1440?minutes:null}
