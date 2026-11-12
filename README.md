@@ -144,3 +144,13 @@ This repository includes a Dockerfile that builds React and serves it with FastA
 After the GitHub/Render app connection is completed, subsequent pushes can redeploy automatically after checks pass; uncommitted local changes are not uploaded automatically. Free instances may sleep and have cold starts. Browser automation can exceed free-instance memory; its live hosted behavior remains unverified. Android acoustics and background notifications require a physical-phone check.
 
 Do not use GitHub Pages for this app: the Python backend and WebSockets require a running server.
+
+### Updated React Bits experience
+
+The home URL first shows an Aurora welcome screen with a Star Border “Get started” button. The voice app does not mount or request a microphone until entry and a talk action. The welcome Aurora uses the selected colors `#3707f8`, `#7cff67`, `#5227FF`, height 0.49, amplitude 1.25, glow 0.95 and brightness 1.35.
+
+The companion keeps the selected Strands orb and Gradient ASCII background. Soft Aurora replaces the page background during active music playback and switches back on pause or stop. A live analyser drives its intensity for local/library audio; YouTube only supplies playback state. Prompt Bar sends typed questions through the existing voice-session connection, including while muted. Jelly Radio controls voice-reply preference; Rubber Segment selects journey mode; Thought Line and Lattice Loader show real waiting states. Peek Rating and Pulse Heart store reply feedback/saved text only in localStorage (latest 30 replies). The existing Voice Pill is reused. Pixel Card appears on the welcome screen and Specular Button styles primary secondary controls.
+
+Calm mode, reduced-motion and unsupported/weak-device fallbacks retain usable static controls. The interface uses one background at a time and lazy-loads the component chunks. No new paid API or backend integration is used for this visual update.
+
+Verification: production build and 10 Chromium browser checks passed for mobile/desktop, typed conversation while muted, waiting states, local feedback, generated music playback/background switching, journey tabs with a mocked route failure, contacts/helper layout, Calm mode and WebGL-disabled operation. Conversation and route responses were mocked for these UI tests; live LLM/STT/TTS and physical-phone acoustics were not re-tested as part of this design update.

@@ -1,3 +1,4 @@
+import {JourneyModes} from './Design';
 import {ProgressSteps,LoadingStatus} from './Polish';
 import React,{useEffect,useRef,useState} from 'react';
 import L from 'leaflet';import 'leaflet/dist/leaflet.css';
@@ -31,7 +32,7 @@ export default function MapSection({data,position,lang,onClose,onRoute,onStart,o
  function choose(candidate){setCandidates([]);setDest({lat:candidate.lat,lon:candidate.lon});askedCandidates.current=false}
  return <section ref={section} className="content-section journey-section" aria-label={w.journey}>
   <div className="section-heading"><div><p className="section-kicker">{w.journey}</p><h2>{data.destination}</h2></div><button aria-label="Close journey" onClick={()=>{onEnd();onClose()}}>×</button></div>
-  <div className="mode-tabs" role="tablist">{[['walk',w.walk],['drive',w.drive],['transit',w.transit]].map(([key,label])=><button key={key} role="tab" aria-selected={mode===key} onClick={()=>{onEnd({keepLocation:true});setMode(key)}}>{label}</button>)}</div>
+  <JourneyModes items={[{value:'walk',label:w.walk},{value:'drive',label:w.drive},{value:'transit',label:w.transit}]} value={mode} onChange={key=>{onEnd({keepLocation:true});setMode(key)}}/>
   <div className="journey-map" ref={container} aria-label="Journey map"/>
   {candidates.length>0&&<div className="destination-options"><h3>{w.which}</h3>{candidates.map((c,i)=><button key={i} onClick={()=>choose(c)}>{c.name}</button>)}</div>}
   {loading&&<LoadingStatus text={w.loading}/>}
