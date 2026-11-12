@@ -33,3 +33,5 @@ body{font-size:20px;color:#523b2b}.top-note{font-size:20px;color:#724a31;letter-
 
 /* Gradient ASCII is the sole page background. Text surfaces stay readable. */
 html,html[data-theme]{background:#cdd6e6}.app{background:transparent!important}.app:before{display:none!important}.effect-background{pointer-events:auto;background:#cdd6e6}.app>main{pointer-events:none}.app>main button,.app>main a,.app>main input,.app>main select,.app>main textarea,.content-section,.intro,.current-text,.status,.transcript,.controls,.error,.guidance-banner,.floating-mic{pointer-events:auto}.stage{background:transparent!important;backdrop-filter:none!important}.stage .intro,.stage .status,.stage .current-text:not(:empty),.stage .transcript,.stage>.error{background:rgba(255,250,239,.94);backdrop-filter:blur(12px);border-radius:24px;padding:12px}
+
+:root{background:#cdd6e6!important}.effect-background{touch-action:pan-y}
