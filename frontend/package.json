@@ -16,6 +16,7 @@
 		"leaflet": "^1.9.4",
 		"lucide-react": "latest",
 		"motion": "^12.43.0",
+		"ogl": "^1.0.11",
 		"react": "latest",
 		"react-dom": "latest",
 		"tailwindcss": "^4.0.0",
