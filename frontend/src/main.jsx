@@ -36,7 +36,7 @@ function App(){
  useEffect(()=>{const observer=new IntersectionObserver(entries=>setFloating(!entries[0].isIntersecting),{threshold:.1});if(orb.current)observer.observe(orb.current);return ()=>observer.disconnect()},[]);
  useEffect(()=>()=>{controller.current?.stop();cancelAnimationFrame(animation.current)},[]);
  const w=t(lang),labels={idle:locale(lang)==='hi'?'बात करने के लिए दबाइए':locale(lang)==='kn'?'ಮಾತನಾಡಲು ಒತ್ತಿ':'Tap to talk',listening:locale(lang)==='hi'?'मैं सुन रही हूँ':locale(lang)==='kn'?'ಕೇಳುತ್ತಿದ್ದೇನೆ':'I’m listening',thinking:w.thinking,speaking:locale(lang)==='hi'?'आपसे बात कर रही हूँ':locale(lang)==='kn'?'ಮಾತನಾಡುತ್ತಿದ್ದೇನೆ':'Speaking to you'};
- return <div className="app"><EffectBackground/><Waves signal={waveSignal}/><DebugOverlay voice={voice}/>
+ return <div className="app"><EffectBackground/><DebugOverlay voice={voice}/>
   <GuidanceBanner state={guidance.state} active={guidance.active} lang={lang} onEnd={endJourney}/>
   <header className="top"><div className="brand"><span className="brand-icon">✳</span><span>gNani <i>AI</i></span></div><CalmControl/><button className="people-open" onClick={()=>openPeople()}>My people</button></header>
   <main><section className="stage" ref={orbSection}><div className="intro"><h1>Namaste! Main hoon <em>gNani.</em></h1><p>Aap mujhe kuch bhi poochiye.</p></div>

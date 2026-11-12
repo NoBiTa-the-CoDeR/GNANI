@@ -26,3 +26,10 @@ body{font-size:20px;color:#523b2b}.top-note{font-size:20px;color:#724a31;letter-
 
 .section-kicker,figcaption,.music-credit,.video-card p,footer,.transcript span,.web-url{font-size:20px!important;color:#63381f!important}.polished-steps button,.polished-steps button span{font-size:20px!important}
 .orb-button{background:radial-gradient(circle at 35% 25%,#fff9dd,#f3c785 55%,#df9853);border-radius:50%}.orb-button.muted{filter:saturate(.25)}.skeleton-row{flex-wrap:wrap}
+
+.effect-background[data-background=gradient-ascii].shown{opacity:1}.effect-background[data-background=gradient-ascii][data-effects=css]{opacity:1;background:linear-gradient(135deg,#cdd6e6,#367ffc,#1198fe,#00b1ff)}
+:is(html:not([data-theme]),html[data-theme=default]) .stage{background:transparent;backdrop-filter:none}
+:is(html:not([data-theme]),html[data-theme=default]) .stage .intro,:is(html:not([data-theme]),html[data-theme=default]) .stage .status,:is(html:not([data-theme]),html[data-theme=default]) .stage .current-text:not(:empty),:is(html:not([data-theme]),html[data-theme=default]) .stage .transcript,:is(html:not([data-theme]),html[data-theme=default]) .stage>.error{background:rgba(255,250,239,.94);backdrop-filter:blur(12px);border-radius:24px;padding:12px}
+
+/* Gradient ASCII is the sole page background. Text surfaces stay readable. */
+html,html[data-theme]{background:#cdd6e6}.app{background:transparent!important}.app:before{display:none!important}.effect-background{pointer-events:auto;background:#cdd6e6}.app>main{pointer-events:none}.app>main button,.app>main a,.app>main input,.app>main select,.app>main textarea,.content-section,.intro,.current-text,.status,.transcript,.controls,.error,.guidance-banner,.floating-mic{pointer-events:auto}.stage{background:transparent!important;backdrop-filter:none!important}.stage .intro,.stage .status,.stage .current-text:not(:empty),.stage .transcript,.stage>.error{background:rgba(255,250,239,.94);backdrop-filter:blur(12px);border-radius:24px;padding:12px}
