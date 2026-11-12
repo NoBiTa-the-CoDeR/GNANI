@@ -53,3 +53,9 @@ Before visual upgrade: main JavaScript 148.19 KB gzip (original baseline 146.13 
 [Learning theme](docs/verification-2026-11-12/bits-learning.png)
 
 Official references: [Groq models](https://console.groq.com/docs/models), [Groq tools](https://console.groq.com/docs/tool-use/overview), [Timbre voices](https://docs.gnani.ai/api/TTS/available-voices), [React Bits installation](https://reactbits.dev/get-started/installation).
+
+## Hosted release check
+
+Application commit 65b5319 was deployed on Render after GitHub Actions passed. HTTPS home and /selftest loaded successfully; /api/health returned HTTP 200 with speech and brain configured. A real hosted English request returned three Timbre audio sentences; first audio arrived at 1775 ms, then 2973 ms and 3632 ms. The released mobile page showed the new controls without runtime errors. [Hosted screenshot](docs/verification-2026-11-12/hosted-current.png).
+
+Render currently requires a manual deploy for this public-repository connection. Its automatic trigger is configured but has not propagated test commits; do not assume pushes alone publish changes until the GitHub/Render repository connection is completed.

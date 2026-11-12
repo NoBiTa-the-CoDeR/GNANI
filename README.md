@@ -141,6 +141,6 @@ This repository includes a Dockerfile that builds React and serves it with FastA
 4. Set APP_ORIGINS to the exact HTTPS address Render assigns, then redeploy. This is required for the opt-in experimental web assistant.
 5. Open the assigned HTTPS address and check `/api/health`, microphone, Timbre playback and a typed question. A build alone does not verify live API credentials.
 
-Subsequent pushes redeploy automatically after checks pass; uncommitted local changes are not uploaded automatically. Free instances may sleep and have cold starts. Browser automation can exceed free-instance memory; its live hosted behavior remains unverified. Android acoustics and background notifications require a physical-phone check.
+After the GitHub/Render app connection is completed, subsequent pushes can redeploy automatically after checks pass; uncommitted local changes are not uploaded automatically. Free instances may sleep and have cold starts. Browser automation can exceed free-instance memory; its live hosted behavior remains unverified. Android acoustics and background notifications require a physical-phone check.
 
 Do not use GitHub Pages for this app: the Python backend and WebSockets require a running server.
