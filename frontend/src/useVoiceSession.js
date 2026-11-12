@@ -44,10 +44,10 @@ export function useVoiceSession(options){
   if(connecting.current)return connecting.current;
   running.current=true;
   connecting.current=new Promise((resolve,reject)=>{
-   const ws=new WebSocket(`${location.protocol==='https:'?'wss':'ws'}://${location.host}/api/session`);socket.current=ws;
-   ws.onopen=()=>{setActive(true);send('web_preference',opts.current.webPreferenceRef?.current||{enabled:false});send('mic_state',{enabled:!!stream.current&&!mutedRef.current});resolve()};
-   ws.onerror=()=>{setError('The local voice service is not reachable.');reject(new Error('Connection unavailable'))};
-   ws.onclose=()=>{connecting.current=null;if(running.current){setError('Connection lost. Please try again.');phaseTo(mutedRef.current?'muted':'idle')}};
+   const ws=new WebSocket(`${location.protocol==='https:'?'wss':'ws'}://${location.host}/api/session`);socket.current=ws;let opened=false;const timeout=setTimeout(()=>{if(!opened){reject(new Error('Connection timed out'));ws.close()}},8000);
+   ws.onopen=()=>{opened=true;clearTimeout(timeout);setActive(true);send('web_preference',opts.current.webPreferenceRef?.current||{enabled:false});send('mic_state',{enabled:!!stream.current&&!mutedRef.current});resolve()};
+   ws.onerror=()=>{clearTimeout(timeout);setError('The voice service could not connect. Please try again.');reject(new Error('Connection unavailable'))};
+   ws.onclose=()=>{clearTimeout(timeout);if(!opened)reject(new Error('Connection closed before opening'));connecting.current=null;if(running.current){setError('Connection lost. Please try again.');phaseTo(mutedRef.current?'muted':'idle')}};
    ws.onmessage=e=>{
     const m=JSON.parse(e.data);if(m.request_id&&m.request_id!==currentId.current)return;
     if(m.type==='transcript'){setRaw(m.text);console.info('[gNani STT]',{characters:m.text.length,language:m.language});diagnostics.current.lastTranscript=performance.now();diagnostics.current.lowSince=0;setError('')}
