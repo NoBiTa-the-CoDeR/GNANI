@@ -42,10 +42,12 @@ export function useVoiceSession(options){
  async function connect(){
   if(socket.current?.readyState===1)return;
   if(connecting.current)return connecting.current;
-  running.current=true;
+  running.current=true;setError('');phaseTo('thinking');
+  // A free Render instance can need roughly a minute to wake from sleep.
+  fetch('/api/health',{cache:'no-store'}).catch(()=>{});
   connecting.current=new Promise((resolve,reject)=>{
-   const ws=new WebSocket(`${location.protocol==='https:'?'wss':'ws'}://${location.host}/api/session`);socket.current=ws;let opened=false;const timeout=setTimeout(()=>{if(!opened){reject(new Error('Connection timed out'));ws.close()}},8000);
-   ws.onopen=()=>{opened=true;clearTimeout(timeout);setActive(true);send('web_preference',opts.current.webPreferenceRef?.current||{enabled:false});send('mic_state',{enabled:!!stream.current&&!mutedRef.current});send('location',{location:opts.current.positionRef.current||null});resolve()};
+   const ws=new WebSocket(`${location.protocol==='https:'?'wss':'ws'}://${location.host}/api/session`);socket.current=ws;let opened=false;const timeout=setTimeout(()=>{if(!opened){reject(new Error('Connection timed out'));ws.close()}},65000);
+   ws.onopen=()=>{opened=true;clearTimeout(timeout);setError('');setActive(true);send('web_preference',opts.current.webPreferenceRef?.current||{enabled:false});send('mic_state',{enabled:!!stream.current&&!mutedRef.current});send('location',{location:opts.current.positionRef.current||null});resolve()};
    ws.onerror=()=>{clearTimeout(timeout);setError('The voice service could not connect. Please try again.');reject(new Error('Connection unavailable'))};
    ws.onclose=()=>{clearTimeout(timeout);if(!opened)reject(new Error('Connection closed before opening'));connecting.current=null;if(running.current){setError('Connection lost. Please try again.');phaseTo(mutedRef.current?'muted':'idle')}};
    ws.onmessage=e=>{

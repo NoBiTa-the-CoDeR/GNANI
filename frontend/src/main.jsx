@@ -1,3 +1,4 @@
+import RecoveryNotice from './RecoveryNotice';
 import LanguagePicker from './LanguagePicker';
 import YouTubeSearch from './YouTubeSearch';
 import {RevealTitle,ColorWord,SectionTitle,FeatureHeading,EnterContent} from './TextDesign';
@@ -49,7 +50,7 @@ function App(){
    <div className="status"><span className="status-dot"/>{voice.muted?voice.privacy.muted:labels[voice.phase]}</div><div className="current-text" aria-live="polite" data-visible={!!voice.line||voice.phase==='thinking'}>{voice.phase==='thinking'?<ThinkingLine label={w.thinking}/>:voice.line}</div>
    {voice.reply&&!voice.speaking&&(voice.reply.typed||!voice.repliesAloud)&&<button className="listen-reply primary-action" onClick={voice.listenReply}>▶ {locale(lang)==='hi'?'सुनिए':locale(lang)==='kn'?'ಕೇಳಿ':'Listen'}</button>}
    {voice.raw&&<div className="transcript"><span>{locale(lang)==='hi'?'आपने कहा':locale(lang)==='kn'?'ನೀವು ಹೇಳಿದ್ದು':'You said'}</span><p>{voice.raw}</p></div>}
-   {voice.error&&<p className="error" role="alert">{voice.error}</p>}
+   {voice.error&&<RecoveryNotice voice={voice} lang={lang}/>}
    {hint&&<button className="below-hint" onClick={()=>calmScroll(document.querySelector(hint===w.mapBelow?'.journey-section':'.helper-section'))}>↓ {hint}</button>}
    {(mapData||journeyRequested)&&locationStatus&&<p className="location-status"><MapPin size={22}/>{locationStatus}</p>}
    <div className="controls">{voice.active&&<button onClick={voice.repeat} aria-label="Repeat last response"><Volume2 size={24}/>{w.repeat}</button>}{voice.active&&<button onClick={endConversation} aria-label="End conversation"><PhoneOff size={24}/>{locale(lang)==='hi'?'बात समाप्त करें':locale(lang)==='kn'?'ಮಾತು ಮುಗಿಸಿ':'End conversation'}</button>}</div>

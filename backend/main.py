@@ -42,7 +42,7 @@ class ConversationClient(httpx.AsyncClient):
         if str(url).startswith(os.getenv('OPENROUTER_BASE_URL','https://openrouter.ai/api/v1').rstrip('/')+'/') and isinstance(body,dict) and body.get('model')!='openrouter/free' and not str(body.get('model','')).endswith(':free'):
             raise httpx.RequestError('Only free OpenRouter models are enabled')
         groq_base=os.getenv('GROQ_BASE_URL','https://api.groq.com/openai/v1').rstrip('/')
-        provider='groq' if str(url)==groq_base+'/chat/completions' else 'openrouter'
+        provider=next((name for name,base in sys.modules['llm'].DEFAULT_URLS.items() if str(url).startswith(os.getenv(name.upper()+'_BASE_URL',base).rstrip('/')+'/')),'llm')
         if isinstance(body,dict) and body.get('tools'):
             kwargs['json']={**body,'max_tokens':int(os.getenv('LLM_MAX_TOKENS','900'))}
             messages=body.get('messages',[])
@@ -103,6 +103,9 @@ class ConversationClient(httpx.AsyncClient):
         if response.status_code>=400:
             provider_failure.set(f'{provider}: HTTP {response.status_code} {response.reason_phrase}')
         return response
+
+from backend.reliability import install as install_reliability
+install_reliability(brain.llm)
 
 # Observe failures without logging provider URLs, request parameters or credentials.
 last_tool_failure = contextvars.ContextVar('last_tool_failure', default=None)
