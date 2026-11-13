@@ -37,3 +37,16 @@ class Freshness(unittest.TestCase):
   import time
   self.assertIsNone(main.gps_from({'location':{'lat':12.9,'lon':77.6,'timestamp':time.time()*1000-60000}}))
   self.assertEqual(main.gps_from({'location':{'lat':12.9,'lon':77.6,'timestamp':time.time()*1000}}),{'lat':12.9,'lon':77.6})
+
+class GentleFailure(unittest.TestCase):
+ def test_exhausted_providers_keep_message_and_remove_crowding_wording(self):
+  respond=AsyncMock(return_value={'text':'Too many people are talking to me right now.','lang':'en','error':'rate_limit','segments':[{'voice':'f','text':'Too many requests'}]})
+  with patch.object(main.brain,'respond',respond),TestClient(main.app) as client,client.websocket_connect('/api/session') as ws:
+   ws.send_json({'type':'text','text':'Hello, how are you?','aloud':False,'request_id':'fallback'})
+   reply=None
+   while True:
+    event=ws.receive_json()
+    if event['type']=='reply':reply=event
+    if event['type']=='response_end':break
+   self.assertIn('Your message is still here',reply['text'])
+   self.assertNotIn('Too many',str(reply))

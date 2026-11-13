@@ -367,6 +367,11 @@ async def session(ws:WebSocket):
             result['lang']=expected_locale.split('-')[0]
         timing.mark('llm_complete')
         err=result.get('error')
+        if err and not (result.get('map') or result.get('panel')):
+            gentle={'hi':'थोड़ी देर बाद फिर कोशिश कीजिए। आपका संदेश यहीं है।','kn':'ಸ್ವಲ್ಪ ಸಮಯದ ನಂತರ ಮತ್ತೆ ಪ್ರಯತ್ನಿಸಿ. ನಿಮ್ಮ ಸಂದೇಶ ಇಲ್ಲೇ ಇದೆ.','en':'Please try again in a little while. Your message is still here.'}
+            result['text']=gentle.get(user_locale.split('-')[0],gentle['en'])
+            result['segments']=[{'voice':'f','text':result['text']}]
+            await emit({'type':'tool_error','text':'assistant_unavailable'})
         # Preserve a completed visual tool result when a free provider fails
         # during its closing sentence. The exact service error stays visible.
         if err and (result.get('map') or result.get('panel')):
